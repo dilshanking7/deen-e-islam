@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# large assets not needed by the app (only used by extract script)
+quran-sharif.pdf
+
 # vercel
 .vercel
 
