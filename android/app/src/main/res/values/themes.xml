@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.IslaamEDeen" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#065f46</item>
+        <item name="colorPrimaryVariant">#064e3b</item>
+        <item name="colorOnPrimary">#ffffff</item>
+        <item name="android:statusBarColor">#065f46</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
