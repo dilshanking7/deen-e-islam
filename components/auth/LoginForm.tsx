@@ -145,6 +145,11 @@ export default function LoginForm() {
     try {
       const user = await loginWithGoogle();
 
+      if (!user) {
+        setSuccess("Google account pe redirect ho rahe hain...");
+        return;
+      }
+
       const profile = await getUserProfile(user.uid);
 
       setSuccess("Google Login Successful 🤍");

@@ -8,6 +8,8 @@ import {
   updatePassword,
   signOut,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
 } from "firebase/auth";
 
@@ -46,9 +48,31 @@ export async function loginUser(
 export async function loginWithGoogle() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
+
+  // Android WebView app me popup block hota hai, redirect se login hota hai.
+  // WebView (MainActivity.kt) user-agent me "IslaamEDeenChrome" set karta hai.
+  const isInApp =
+    typeof navigator !== "undefined" &&
+    /IslaamEDeenChrome/i.test(navigator.userAgent);
+
+  if (isInApp) {
+    await signInWithRedirect(auth, provider);
+    return null; // redirect ke baad completeGoogleRedirect() handle karta hai
+  }
+
   const userCredential = await signInWithPopup(auth, provider);
   await ensureUserProfile(userCredential.user);
   return userCredential.user;
+}
+
+// WebView app me redirect login complete karne ke liye (app start par call karo)
+export async function completeGoogleRedirect(): Promise<boolean> {
+  const result = await getRedirectResult(auth);
+  if (result?.user) {
+    await ensureUserProfile(result.user);
+    return true;
+  }
+  return false;
 }
 
 export async function logoutUser() {

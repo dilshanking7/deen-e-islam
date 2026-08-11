@@ -29,8 +29,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
 
-    // PWA URL - replace with your deployed domain
-    private val appUrl = "https://YOUR_DOMAIN_HERE.com"
+    // PWA URL - your deployed domain
+    private val appUrl = "https://deen-e-islam.onrender.com"
 
     private val locationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -54,6 +54,7 @@ class MainActivity : AppCompatActivity() {
             loadWithOverviewMode = true
             mediaPlaybackRequiresUserGesture = false
             cacheMode = WebSettings.LOAD_DEFAULT
+            setSupportMultipleWindows(true)
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             userAgentString = userAgentString.replace(
                 "Chrome", "IslaamEDeenChrome"
@@ -72,6 +73,43 @@ class MainActivity : AppCompatActivity() {
             ) {
                 requestLocationPermissions()
                 callback?.invoke(origin, true, false)
+            }
+
+            // Firebase/Google login popup window handle karo
+            override fun onCreateWindow(
+                view: WebView?,
+                isDialog: Boolean,
+                isUserGesture: Boolean,
+                resultMsg: android.os.Message
+            ): Boolean {
+                val childView = WebView(this@MainActivity)
+                childView.settings.apply {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                    databaseEnabled = true
+                    setSupportMultipleWindows(true)
+                    userAgentString = userAgentString.replace(
+                        "Chrome", "IslaamEDeenChrome"
+                    )
+                }
+                childView.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        super.onPageFinished(view, url)
+                        // login complete ya cancel hone par popup band karo
+                        val lower = url?.lowercase() ?: ""
+                        if (lower.contains("=close") || lower.contains("error")) {
+                            addContentView(
+                                view, android.view.ViewGroup.LayoutParams(1, 1)
+                            )
+                            view?.destroy()
+                        }
+                    }
+                }
+                childView.layoutParams = android.view.ViewGroup.LayoutParams(1, 1)
+                addContentView(childView, childView.layoutParams)
+                (resultMsg.obj as? WebView.WebViewTransport)?.webView = childView
+                resultMsg.sendToTarget()
+                return true
             }
         }
 

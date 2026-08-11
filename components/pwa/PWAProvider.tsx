@@ -8,6 +8,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { completeGoogleRedirect } from "@/lib/auth";
+import { getUserProfile } from "@/lib/firestore";
+import { auth } from "@/lib/firebase";
 
 interface PWAContextValue {
   canInstall: boolean;
@@ -42,6 +45,19 @@ export default function PWAProvider({ children }: { children: ReactNode }) {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
+
+    // Android WebView app: Google redirect login complete karo agar pending ho
+    completeGoogleRedirect()
+      .then(async (loggedIn) => {
+        if (!loggedIn) return;
+        const profile = await getUserProfile(auth.currentUser?.uid ?? "");
+        if (profile?.completedOnboarding) {
+          window.location.href = "/home";
+        } else {
+          window.location.href = "/welcome";
+        }
+      })
+      .catch(() => {});
 
     const media = window.matchMedia("(display-mode: standalone)");
     const onChange = (e: MediaQueryListEvent) => setIsStandalone(e.matches);
