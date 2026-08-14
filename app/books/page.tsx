@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Search, FileText, ExternalLink, ChevronRight } from "lucide-react";
+import { Search, FileText, BookOpen, ChevronRight } from "lucide-react";
 import { BOOKS, getBook } from "@/lib/books-data";
 import { PDF_FILES } from "@/lib/pdfs-data";
 import { useI18n } from "@/lib/i18n";
@@ -185,13 +185,11 @@ export default function BooksPage() {
                   <h3 className="truncate font-bold text-gray-800">{pdf.title}</h3>
                   <p className="truncate text-xs text-gray-500">{pdf.subtitle}</p>
                   <button
-                    onClick={() =>
-                      window.open(pdf.file, "_blank", "noopener,noreferrer")
-                    }
+                    onClick={() => router.push(`/pdf/${pdf.id}`)}
                     className="mt-2 inline-flex items-center gap-1 rounded-xl bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
                   >
-                    <ExternalLink size={13} />
-                    {t("books.openPdf")}
+                    <BookOpen size={13} />
+                    {t("books.readPdf")}
                   </button>
                 </div>
               </motion.div>

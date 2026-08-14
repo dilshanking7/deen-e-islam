@@ -6,8 +6,7 @@ export interface PdfFile {
   icon: string;
 }
 
-export const PDF_FILES: PdfFile[] = [
-  {
+export const PDF_FILES: PdfFile[] = [  {
     id: "qanun-shariat",
     file: "/pdfs/qanun-e-shariyat.pdf",
     title: "Qanun-e-Shariyat",
@@ -43,3 +42,7 @@ export const PDF_FILES: PdfFile[] = [
     icon: "🤲",
   },
 ];
+
+export function getPdfByFile(file: string): PdfFile | undefined {
+  return PDF_FILES.find((p) => p.file === file);
+}

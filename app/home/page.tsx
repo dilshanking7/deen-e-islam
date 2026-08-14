@@ -16,7 +16,7 @@ import {
   type PrayerTimings,
 } from "@/lib/prayer-api";
 import { getVerseAt, getRandomVerseIndex, getRandomVerse, type DailyVerse } from "@/lib/daily-verse";
-import { getLocationByIP } from "@/lib/geo";
+import { getLocationByIP, getPlaceName } from "@/lib/geo";
 import { useI18n } from "@/lib/i18n";
 import { useUnreadConversations } from "@/lib/use-unread";
 
@@ -70,6 +70,8 @@ const FEATURES = [
   { key: "tasbeeh", icon: "📿", path: "/tasbeeh" },
   { key: "books", icon: "📕", path: "/books" },
   { key: "history", icon: "🕋", path: "/history" },
+  { key: "naat", icon: "🎵", path: "/naat" },
+  { key: "prophets", icon: "🕊️", path: "/prophets" },
   { key: "community", icon: "👥", path: "/community" },
   { key: "settings", icon: "⚙️", path: "/setting" },
 ] as const;
@@ -129,6 +131,10 @@ export default function HomePage() {
     async (latitude: number, longitude: number, label: string) => {
       localStorage.setItem("lat", String(latitude));
       localStorage.setItem("lng", String(longitude));
+      if (!label) {
+        const place = await getPlaceName(latitude, longitude);
+        label = place?.label || "";
+      }
       setLocationLabel(label);
       setLocationFailed(false);
       await loadPrayerTimings();

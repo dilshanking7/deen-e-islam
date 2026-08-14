@@ -31,10 +31,10 @@ import {
 function MushafContent() {
   const router = useRouter();
 
-  // Helper to Sync URL with page number
+  // Helper to Sync URL with page number (replace = back button seedha bahar jayega)
   const updateURL = useCallback(
     (newPage: number) => {
-      router.push(`/quran/mushaf?page=${newPage}`, { scroll: false });
+      router.replace(`/quran/mushaf?page=${newPage}`, { scroll: false });
     },
     [router]
   );

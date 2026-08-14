@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Play, Pause, Volume2, Search, Music } from "lucide-react";
+import { Play, Pause, Volume2, Search, Music, SkipBack, SkipForward } from "lucide-react";
 import { getSurahs } from "@/lib/quran-api";
 
 interface Surah {
@@ -68,6 +68,13 @@ export default function AudioPage() {
       audioRef.current.play();
       setPlaying(true);
     }
+  }
+
+  function playAdjacent(delta: number) {
+    if (!currentSurah) return;
+    const idx = surahs.findIndex((s) => s.number === currentSurah.number);
+    const target = surahs[idx + delta];
+    if (target) playAudio(target);
   }
 
   // Audio progress and ended event listeners
@@ -229,12 +236,30 @@ export default function AudioPage() {
 
             {/* Center Controls */}
             <div className="flex flex-1 max-w-md flex-col items-center gap-1">
-              <button
-                onClick={togglePlayPause}
-                className="rounded-full bg-emerald-700 p-3 text-white transition hover:bg-emerald-800"
-              >
-                {playing ? <Pause size={22} /> : <Play size={22} />}
-              </button>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => playAdjacent(-1)}
+                  disabled={!currentSurah || currentSurah.number <= 1}
+                  title="Previous Surah"
+                  className="rounded-full bg-emerald-100 p-2.5 text-emerald-800 transition hover:bg-emerald-200 active:scale-95 disabled:opacity-30"
+                >
+                  <SkipBack size={20} />
+                </button>
+                <button
+                  onClick={togglePlayPause}
+                  className="rounded-full bg-emerald-700 p-3.5 text-white transition hover:bg-emerald-800"
+                >
+                  {playing ? <Pause size={24} /> : <Play size={24} />}
+                </button>
+                <button
+                  onClick={() => playAdjacent(1)}
+                  disabled={!currentSurah || currentSurah.number >= 114}
+                  title="Next Surah"
+                  className="rounded-full bg-emerald-100 p-2.5 text-emerald-800 transition hover:bg-emerald-200 active:scale-95 disabled:opacity-30"
+                >
+                  <SkipForward size={20} />
+                </button>
+              </div>
 
               {/* Progress Line */}
               <div className="h-1.5 w-full rounded-full bg-gray-200">

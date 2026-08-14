@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import PWAProvider from "@/components/pwa/PWAProvider";
 import ThemeProvider from "@/providers/ThemeProvider";
 import BottomNav from "@/components/layout/BottomNav";
+import EventNotifier from "@/components/notifications/EventNotifier";
 import { I18nProvider } from "@/lib/i18n";
 import "./globals.css";
 
@@ -56,6 +57,7 @@ export default function RootLayout({
           <ThemeProvider>
             <PWAProvider>{children}</PWAProvider>
             <BottomNav />
+            <EventNotifier />
           </ThemeProvider>
         </I18nProvider>
       </body>

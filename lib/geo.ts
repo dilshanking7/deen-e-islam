@@ -6,6 +6,49 @@ export interface GeoLocation {
   label: string;
 }
 
+export interface PlaceName {
+  label: string;
+  town: string;
+  district: string;
+  state: string;
+  postcode: string;
+  country: string;
+}
+
+export async function getPlaceName(
+  latitude: number,
+  longitude: number
+): Promise<PlaceName | null> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=jsonv2&addressdetails=1`,
+      { signal: AbortSignal.timeout(9000) }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const a = data?.address || {};
+    const town =
+      a.village || a.town || a.city || a.municipality || a.county || "";
+    const district =
+      a.city_district || a.suburb || a.county_district || "";
+    const state = a.state || "";
+    const postcode = a.postcode || "";
+    const country = a.country || "";
+    const parts = [town, district, state].filter(Boolean);
+    if (postcode) parts.push(postcode);
+    return {
+      label: parts.join(", ") || `${latitude.toFixed(2)}, ${longitude.toFixed(2)}`,
+      town,
+      district,
+      state,
+      postcode,
+      country,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function getLocationByIP(): Promise<GeoLocation | null> {
   try {
     const res = await fetch("https://ipwho.is/", { signal: AbortSignal.timeout(8000) });

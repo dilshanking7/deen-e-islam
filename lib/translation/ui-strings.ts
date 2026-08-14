@@ -1,4 +1,4 @@
-export type LanguageCode = "en" | "ur" | "hi" | "ar";
+﻿export type LanguageCode = "en" | "ur" | "hi" | "ar";
 
 export interface LanguageOption {
   code: LanguageCode;
@@ -84,6 +84,10 @@ const en: Dict = {
   "feature.namesDesc": "Names of Allah & wazifa",
   "feature.history": "History & Prophets",
   "feature.historyDesc": "Timeline & prophets",
+  "feature.naat": "Naat Sharif",
+  "feature.naatDesc": "Write, read & download naats",
+  "feature.prophets": "Ambiya (Prophets)",
+  "feature.prophetsDesc": "Stories of 1,24,000 prophets",
   "feature.community": "Community",
   "feature.communityDesc": "Connect with the Ummah",
   "feature.progress": "Progress",
@@ -151,6 +155,7 @@ const en: Dict = {
   "books.pdfLibrary": "PDF Library",
   "books.pdfDesc": "Original Urdu & Hindi PDF books — open and read",
   "books.openPdf": "Open PDF",
+  "books.readPdf": "Read in App",
   "books.pdfNote":
     "Note: Open a PDF in a new tab or download it. Add more PDFs in the public/pdfs folder.",
 
@@ -278,6 +283,10 @@ const ur: Dict = {
   "feature.namesDesc": "اللہ کے نام اور وظیفہ",
   "feature.history": "تاریخ و انبیاء",
   "feature.historyDesc": "تاریخ و انبیاء",
+  "feature.naat": "نعت شریف",
+  "feature.naatDesc": "نعتیں لکھیں، پڑھیں اور ڈاؤن لوڈ کریں",
+  "feature.prophets": "انبیاء",
+  "feature.prophetsDesc": "ایک لاکھ چوبیس ہزار انبیاء کی کہانیاں",
   "feature.community": "کمیونٹی",
   "feature.communityDesc": "امت سے جڑیں",
   "feature.progress": "پیشرفت",
@@ -345,6 +354,7 @@ const ur: Dict = {
   "books.pdfLibrary": "پی ڈی ایف لائبریری",
   "books.pdfDesc": "اصل اردو اور ہندی پی ڈی ایف کتابیں — کھولیں اور پڑھیں",
   "books.openPdf": "پی ڈی ایف کھولیں",
+  "books.readPdf": "ایپ میں پڑھیں",
   "books.pdfNote":
     "نوٹ: پی ڈی ایف کو نئے ٹیب میں کھولیں یا ڈاؤن لوڈ کریں۔ مزید پی ڈی ایف public/pdfs فولڈر میں رکھیں۔",
 
@@ -470,6 +480,10 @@ const hi: Dict = {
   "feature.namesDesc": "अल्लाह के नाम और वज़ीफ़ा",
   "feature.history": "इतिहास और पैगंबर",
   "feature.historyDesc": "इतिहास और पैगंबर",
+  "feature.naat": "नात शरीफ़",
+  "feature.naatDesc": "नात लिखें, पढ़ें और डाउनलोड करें",
+  "feature.prophets": "अंबिया (नबी)",
+  "feature.prophetsDesc": "1,24,000 नबियों की कहानियाँ",
   "feature.community": "समुदाय",
   "feature.communityDesc": "उम्मत से जुड़ें",
   "feature.progress": "प्रगति",
@@ -537,6 +551,7 @@ const hi: Dict = {
   "books.pdfLibrary": "PDF लाइब्रेरी",
   "books.pdfDesc": "मूल उर्दू और हिंदी PDF किताबें — खोलें और पढ़ें",
   "books.openPdf": "PDF खोलें",
+  "books.readPdf": "ऐप में पढ़ें",
   "books.pdfNote":
     "नोट: PDF को नए टैब में खोलें या डाउनलोड करें। और PDF public/pdfs फ़ोल्डर में रखें।",
 
@@ -659,6 +674,10 @@ const ar: Dict = {
   "feature.namesDesc": "أسماء الله الحسنى والوظيفة",
   "feature.history": "التاريخ والأنبياء",
   "feature.historyDesc": "التاريخ والأنبياء",
+  "feature.naat": "نعت شريف",
+  "feature.naatDesc": "اكتب واقرأ وحمّل النعت",
+  "feature.prophets": "الأنبياء",
+  "feature.prophetsDesc": "قصص مئة وأربعة وعشرين ألف نبي",
   "feature.community": "المجتمع",
   "feature.communityDesc": "تواصل مع الأمة",
   "feature.progress": "التقدم",
@@ -726,6 +745,7 @@ const ar: Dict = {
   "books.pdfLibrary": "مكتبة PDF",
   "books.pdfDesc": "كتب PDF أصلية بالعربية والأردية والهندية — افتح واقرأ",
   "books.openPdf": "فتح PDF",
+  "books.readPdf": "اقرأ في التطبيق",
   "books.pdfNote":
     "ملاحظة: افتح PDF في تبويب جديد أو قم بتنزيله. ضع ملفات PDF إضافية في مجلد public/pdfs.",
 

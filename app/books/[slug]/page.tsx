@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Search, Globe, ChevronLeft, ChevronRight, Copy, Loader2, FileText } from "lucide-react";
+import { getPdfByFile } from "@/lib/pdfs-data";
 import { getBook } from "@/lib/books-data";
 import {
   translateBookContent,
@@ -139,13 +140,13 @@ export default function BookReaderPage() {
           <h2 className="mt-1 text-lg font-semibold text-white/90">{book.titleEn}</h2>
           <p className="mt-1 text-sm text-white/80">{book.authorEn}</p>
           <p className="mt-3 text-sm leading-6 text-white/85">{book.descriptionEn}</p>
-          {book.pdf && (
+          {book.pdf && getPdfByFile(book.pdf) && (
             <button
-              onClick={() => window.open(book.pdf, "_blank", "noopener,noreferrer")}
+              onClick={() => router.push(`/pdf/${getPdfByFile(book.pdf)!.id}`)}
               className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-emerald-800 shadow-lg transition hover:bg-emerald-50"
             >
               <FileText size={16} />
-              Read PDF Version
+              Read PDF Version (page by page)
             </button>
           )}
         </div>

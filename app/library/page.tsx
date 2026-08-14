@@ -49,6 +49,20 @@ export default function LibraryPage() {
       items: [{ label: t("library.hadithLibrary"), path: "/hadith" }],
     },
     {
+      title: "Naat Sharif",
+      desc: "Naatein likhein, parhein aur download karein",
+      icon: "🎵",
+      color: "from-teal-500 to-cyan-600",
+      items: [{ label: "Naat Sharif Library", path: "/naat" }],
+    },
+    {
+      title: "Ambiya (Prophets)",
+      desc: "Nabiyon ki kahaniyan aur wilaadat",
+      icon: "🕊️",
+      color: "from-indigo-500 to-blue-600",
+      items: [{ label: "Prophets ke halaat", path: "/prophets" }],
+    },
+    {
       title: t("library.books"),
       desc: t("library.booksDesc"),
       icon: "📕",

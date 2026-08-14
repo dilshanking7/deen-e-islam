@@ -10,7 +10,6 @@ import {
   getDistricts,
   getStates,
   getCities,
-  INDIA_MAJOR_CITIES,
 } from "@/lib/location-data";
 
 export default function CityPage() {
@@ -36,10 +35,9 @@ export default function CityPage() {
   const districts = useMemo(() => (isIndia ? getDistricts(state) : []), [isIndia, state]);
 
   const [fetchedCities, setFetchedCities] = useState<string[]>([]);
-  const cities = isIndia ? INDIA_MAJOR_CITIES : fetchedCities;
+  const cities = fetchedCities;
 
   useEffect(() => {
-    if (isIndia) return;
     if (!country || !state) return;
 
     // eslint-disable-next-line react-hooks/set-state-in-effect

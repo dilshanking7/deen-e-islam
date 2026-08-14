@@ -16,6 +16,7 @@ import {
   type PrayerDay,
   type PrayerTimings,
 } from "@/lib/prayer-api";
+import { getPlaceName } from "@/lib/geo";
 import ThemeControls from "@/components/ui/ThemeControls";
 import DownloadButton from "@/components/pwa/DownloadButton";
 
@@ -69,11 +70,33 @@ export default function PrayerPage() {
   });
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const firedRef = useRef<Record<string, string>>({});
+  const watchIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  // Saved area (onboarding se) — jab geolocation nahi mile to yehi dikhega
+  const savedArea = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    const c = localStorage.getItem("city") || "";
+    const s = localStorage.getItem("state") || "";
+    const p = localStorage.getItem("pincode") || "";
+    return [c, s, p].filter(Boolean).join(", ");
+  }, [locationName]);
+
+  async function applyPlace(lat: number, lng: number) {
+    localStorage.setItem("lat", String(lat));
+    localStorage.setItem("lng", String(lng));
+    setCoords({ lat, lng });
+    const place = await getPlaceName(lat, lng);
+    if (place) {
+      setLocationName(place.label);
+    } else {
+      setLocationName(savedArea || "Your location");
+    }
+  }
 
   const fetchTimings = useCallback(
     async (lat: number, lng: number, m: number) => {
@@ -82,16 +105,17 @@ export default function PrayerPage() {
       try {
         const day = await getPrayerTimings({ latitude: lat, longitude: lng, method: m });
         setData(day);
-        const city = day.meta?.location?.city || "";
-        const country = day.meta?.location?.country || "";
-        setLocationName([city, country].filter(Boolean).join(", ") || "Your location");
+        if (!locationName) {
+          const place = await getPlaceName(lat, lng);
+          setLocationName(place?.label || savedArea || "Your location");
+        }
       } catch {
         setError("Prayer times nahi mil paye. Internet check karein ya dobara try karein.");
       } finally {
         setLoading(false);
       }
     },
-    []
+    [locationName, savedArea]
   );
 
   useEffect(() => {
@@ -99,6 +123,31 @@ export default function PrayerPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTimings(coords.lat, coords.lng, method);
   }, [coords, method, fetchTimings]);
+
+  // Auto-detect location on mount + LIVE tracking (watchPosition)
+  useEffect(() => {
+    if (!("geolocation" in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        applyPlace(pos.coords.latitude, pos.coords.longitude);
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        applyPlace(pos.coords.latitude, pos.coords.longitude);
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 30000 }
+    );
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function locateMe() {
     setError("");
@@ -108,12 +157,14 @@ export default function PrayerPage() {
     }
     setLoading(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
         setCoords({ lat, lng });
         localStorage.setItem("lat", String(lat));
         localStorage.setItem("lng", String(lng));
+        const place = await getPlaceName(lat, lng);
+        setLocationName(place?.label || savedArea || "Your location");
         setLoading(false);
       },
       (err) => {
@@ -268,18 +319,23 @@ export default function PrayerPage() {
           <div className="flex items-center gap-3">
             <MapPin className="h-5 w-5 text-emerald-700" />
             <div>
-              <p className="font-semibold text-gray-800">{locationName || "Your Location"}</p>
+              <p className="font-semibold text-gray-800">{locationName || savedArea || "Your Location"}</p>
               <p className="text-xs text-gray-400">
                 {data?.meta?.method?.name || CALCULATION_METHODS[method] || "Real-time"} •{" "}
                 {coords ? `${coords.lat.toFixed(2)}, ${coords.lng.toFixed(2)}` : ""}
               </p>
+              {savedArea && locationName !== savedArea && (
+                <p className="mt-0.5 text-[11px] font-semibold text-emerald-600">
+                  📍 Aapka area: {savedArea}
+                </p>
+              )}
             </div>
           </div>
           <button
             onClick={locateMe}
             className="flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800"
           >
-            <RefreshCw className="h-4 w-4" /> Auto-Detect
+            <RefreshCw className="h-4 w-4" /> Live Location
           </button>
         </div>
 

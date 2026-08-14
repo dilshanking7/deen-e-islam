@@ -4,22 +4,30 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Bell, Mail, Users, ChevronRight, MessageCircle } from "lucide-react";
+import { Bell, Mail, Users, ChevronRight, MessageCircle, Sparkles } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { getAllUsers, type PublicUser } from "@/lib/firestore";
 import { useUnreadConversations } from "@/lib/use-unread";
 import { useI18n } from "@/lib/i18n";
+import { getUpcomingEvents, isEventToday, type UpcomingEvent } from "@/lib/islamic-events";
 
 export default function NotificationsPage() {
   const router = useRouter();
   const { t } = useI18n();
   const { conversations } = useUnreadConversations();
   const [users, setUsers] = useState<PublicUser[]>([]);
+  const [upcoming, setUpcoming] = useState<UpcomingEvent[]>([]);
+  const [todayEvent, setTodayEvent] = useState<{ month: number; day: number; titleUrdu: string; titleEng: string; description: string; emoji: string } | null>(null);
 
   useEffect(() => {
     getAllUsers()
       .then((u) => setUsers(u))
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setUpcoming(getUpcomingEvents(4));
+    setTodayEvent(isEventToday());
   }, []);
 
   const userById = useMemo(() => {
@@ -123,6 +131,49 @@ export default function NotificationsPage() {
         <div className="mt-10 flex items-center justify-center gap-2 text-sm text-gray-400">
           <Bell size={15} />
           <span>{t("notifications.reminder")}</span>
+        </div>
+
+        {/* Islamic events */}
+        <div className="mt-8">
+          <div className="flex items-center gap-2">
+            <Sparkles size={18} className="text-amber-500" />
+            <h2 className="text-lg font-extrabold text-gray-800">Upcoming Islamic Events</h2>
+          </div>
+
+          {todayEvent && (
+            <div className="mt-3 flex items-center gap-3 rounded-3xl bg-gradient-to-r from-amber-500 to-orange-600 p-5 text-white shadow-xl">
+              <span className="text-3xl">{todayEvent.emoji}</span>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-amber-100">
+                  Aaj ka din ✨
+                </p>
+                <p className="font-bold">{todayEvent.titleUrdu}</p>
+                <p className="text-sm text-amber-100">{todayEvent.titleEng}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-3 space-y-3">
+            {upcoming.map((ev) => (
+              <button
+                key={ev.titleEng}
+                onClick={() => router.push("/calendar")}
+                className="flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-md ring-1 ring-emerald-50/50 transition hover:ring-2 hover:ring-amber-300"
+              >
+                <span className="text-2xl">{ev.emoji}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-bold text-gray-800">{ev.titleEng}</p>
+                  <p className="text-xs text-gray-500">{ev.description}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-xs font-bold text-amber-600">
+                    {ev.daysAway === 1 ? "Kal" : `${ev.daysAway} din`}
+                  </p>
+                  <p className="text-[10px] text-gray-400">{ev.gregorian}</p>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </main>
