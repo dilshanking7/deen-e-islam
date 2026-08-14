@@ -31,6 +31,7 @@ export interface BookDef {
   descriptionEn: string;
   icon: string;
   accent: string;
+  pdf?: string;
   chapters: BookChapter[];
 }
 

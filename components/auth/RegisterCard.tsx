@@ -7,7 +7,7 @@ import LoginFooter from "./LoginFooter";
 
 export default function RegisterCard() {
   return (
-    <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white/80 backdrop-blur-xl shadow-2xl border border-white/40 p-8">
+    <div className="relative my-6 w-full max-w-sm overflow-hidden rounded-[28px] bg-white/85 backdrop-blur-xl shadow-2xl border border-white/40 p-5">
 
       <BackgroundGlow />
 

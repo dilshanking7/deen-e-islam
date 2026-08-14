@@ -8,7 +8,7 @@ import {
   getUserProfile,
   updateUserProfile,
 } from "@/lib/firestore";
-import { changePassword } from "@/lib/auth";
+import { changePassword, logoutUser } from "@/lib/auth";
 import { getCountries } from "@/lib/location-data";
 
 const RELIGIONS = ["Islam"];
@@ -169,12 +169,17 @@ export default function ProfilePage() {
     );
   }
 
+  async function handleLogout() {
+    await logoutUser();
+    router.push("/login");
+  }
+
   const inputCls =
     "w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100";
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-green-100 py-8">
-      <div className="mx-auto max-w-2xl px-4">
+    <main className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-green-100 pb-32">
+      <div className="mx-auto max-w-2xl px-4 pt-8">
         <button
           onClick={() => router.push("/home")}
           className="mb-4 text-sm font-semibold text-emerald-700 hover:underline"
@@ -422,6 +427,13 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
+
+          <button
+            onClick={handleLogout}
+            className="mt-8 w-full rounded-2xl bg-red-50 py-3.5 text-sm font-bold text-red-600 ring-1 ring-red-100 transition hover:bg-red-100"
+          >
+            ← Logout
+          </button>
         </motion.div>
       </div>
     </main>

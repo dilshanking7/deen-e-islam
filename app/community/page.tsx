@@ -91,6 +91,14 @@ export default function CommunityPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("create") === "1") {
+      setShowCreate(true);
+      window.history.replaceState({}, "", "/community");
+    }
+  }, []);
+
+  useEffect(() => {
     async function loadProfile() {
       const user = auth.currentUser;
       if (user) {

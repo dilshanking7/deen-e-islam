@@ -18,4 +18,4 @@ export type LanguageCode =
   | "en"
   | "hi";
 
-export const DEFAULT_LANGUAGE: LanguageCode = "ur";
+export const DEFAULT_LANGUAGE: LanguageCode = "en";

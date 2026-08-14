@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import PWAProvider from "@/components/pwa/PWAProvider";
 import ThemeProvider from "@/providers/ThemeProvider";
+import BottomNav from "@/components/layout/BottomNav";
 import { I18nProvider } from "@/lib/i18n";
 import "./globals.css";
 
@@ -54,6 +55,7 @@ export default function RootLayout({
         <I18nProvider>
           <ThemeProvider>
             <PWAProvider>{children}</PWAProvider>
+            <BottomNav />
           </ThemeProvider>
         </I18nProvider>
       </body>

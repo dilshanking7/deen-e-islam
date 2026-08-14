@@ -16,6 +16,8 @@ import {
   Globe,
   Search,
   X,
+  Volume2,
+  Square,
 } from "lucide-react";
 
 import {
@@ -29,6 +31,8 @@ import { getSurahList, searchSurahs, type SurahMeta } from "@/lib/surah-list";
 import { saveLastRead } from "@/lib/quran-history";
 import { toggleBookmark, isBookmarked } from "@/lib/quran-bookmark";
 import { useTheme } from "@/providers/ThemeProvider";
+import { getAyahAudioUrl, getOnlineAyahAudioUrl } from "@/lib/quran-page-audio";
+import { languageToSpeechCode, speakText, stopSpeech } from "@/lib/speech";
 
 interface Ayah {
   numberInSurah: number;
@@ -79,6 +83,7 @@ export default function TranslationReader() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [bookmarkedAyahs, setBookmarkedAyahs] = useState<Set<number>>(new Set());
+  const [listeningAyah, setListeningAyah] = useState<number | null>(null);
 
   useEffect(() => {
     getSurahList().then(setSurahList).catch(() => {});
@@ -181,6 +186,36 @@ export default function TranslationReader() {
     } else {
       copyAyah(text);
     }
+  }
+
+  function stopVoice() {
+    stopSpeech();
+    setListeningAyah(null);
+  }
+
+  async function playOne(src: string) {
+    return new Promise<void>((resolve, reject) => {
+      const audio = new Audio(src);
+      audio.onended = () => resolve();
+      audio.onerror = () => reject();
+      audio.play().catch(reject);
+    });
+  }
+
+  async function playAyahVoice(ayahNumber: number, translationText?: string) {
+    if (listeningAyah === ayahNumber) {
+      stopVoice();
+      return;
+    }
+    stopVoice();
+    setListeningAyah(ayahNumber);
+    await playOne(getAyahAudioUrl(surahNumber, ayahNumber)).catch(() =>
+      playOne(getOnlineAyahAudioUrl(surahNumber, ayahNumber)).catch(() => {})
+    );
+    if (translationText && selectedLang !== "Arabic") {
+      speakText(translationText, languageToSpeechCode(selectedLang));
+    }
+    setTimeout(() => setListeningAyah(null), Math.max(1800, (translationText || "").length * 60));
   }
 
   function goToSurah(delta: number) {
@@ -559,6 +594,17 @@ export default function TranslationReader() {
 
                 {/* Action Buttons */}
                 <div className="mt-8 flex flex-wrap gap-3">
+                  <button
+                    onClick={() => playAyahVoice(ayah.numberInSurah, extraText || urduText)}
+                    className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition active:scale-95 ${
+                      listeningAyah === ayah.numberInSurah
+                        ? "bg-rose-600 hover:bg-rose-700"
+                        : "bg-emerald-700 hover:bg-emerald-800 dark:bg-emerald-600"
+                    }`}
+                  >
+                    {listeningAyah === ayah.numberInSurah ? <Square size={18} /> : <Volume2 size={18} />}
+                    {listeningAyah === ayah.numberInSurah ? "Stop" : "Listen"}
+                  </button>
                   <button
                     onClick={() => copyAyah(ayah.text)}
                     className="flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800 active:scale-95 dark:bg-emerald-600"

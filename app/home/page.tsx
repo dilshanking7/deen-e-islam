@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { Bell } from "lucide-react";
 import { auth } from "@/lib/firebase";
-import { logoutUser } from "@/lib/auth";
+import { waitForAuthUser } from "@/lib/auth-state";
 import { getUserProfile } from "@/lib/firestore";
 import { getLastRead } from "@/lib/quran-history";
 import {
@@ -18,8 +19,6 @@ import { getVerseAt, getRandomVerseIndex, getRandomVerse, type DailyVerse } from
 import { getLocationByIP } from "@/lib/geo";
 import { useI18n } from "@/lib/i18n";
 import { useUnreadConversations } from "@/lib/use-unread";
-import DownloadButton from "@/components/pwa/DownloadButton";
-import ThemeControls from "@/components/ui/ThemeControls";
 
 interface UserData {
   fullName?: string;
@@ -61,6 +60,7 @@ const FEATURES = [
   { key: "quran", icon: "📖", path: "/quran" },
   { key: "read", icon: "📘", path: "/quran/read" },
   { key: "translate", icon: "🌍", path: "/quran/translation" },
+  { key: "names", icon: "📿", path: "/names" },
   { key: "prayer", icon: "🕌", path: "/prayer" },
   { key: "dailyVerse", icon: "✨", path: "/quran/daily-verse" },
   { key: "calendar", icon: "🗓️", path: "/calendar" },
@@ -69,9 +69,18 @@ const FEATURES = [
   { key: "duas", icon: "🤲", path: "/dua" },
   { key: "tasbeeh", icon: "📿", path: "/tasbeeh" },
   { key: "books", icon: "📕", path: "/books" },
+  { key: "history", icon: "🕋", path: "/history" },
   { key: "community", icon: "👥", path: "/community" },
-  { key: "progress", icon: "📈", path: "/progress" },
   { key: "settings", icon: "⚙️", path: "/setting" },
+] as const;
+
+const QUICK_ACTIONS = [
+  { key: "prayer", icon: "🕌", path: "/prayer" },
+  { key: "quran", icon: "📖", path: "/quran/read" },
+  { key: "names", icon: "📿", path: "/names" },
+  { key: "duas", icon: "🤲", path: "/dua" },
+  { key: "tasbeeh", icon: "📿", path: "/tasbeeh" },
+  { key: "books", icon: "📕", path: "/books" },
 ] as const;
 
 export default function HomePage() {
@@ -161,7 +170,7 @@ export default function HomePage() {
 
   useEffect(() => {
     async function loadProfile() {
-      const user = auth.currentUser;
+      const user = auth.currentUser || (await waitForAuthUser());
 
       if (!user) {
         router.push("/login");
@@ -198,11 +207,6 @@ export default function HomePage() {
     return !p.fullName || !p.country;
   }, [userData]);
 
-  async function handleLogout() {
-    await logoutUser();
-    router.push("/login");
-  }
-
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
     if (hour < 12) return t("home.greetingMorning");
@@ -229,7 +233,7 @@ export default function HomePage() {
         <div className="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-green-400/30 blur-[120px]" />
       </div>
 
-      <div className="mx-auto max-w-7xl px-6 py-8">
+      <div className="mx-auto max-w-7xl px-5 pb-32 pt-6">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <button onClick={() => router.push("/profile")} className="relative block h-12 w-12">
@@ -247,22 +251,45 @@ export default function HomePage() {
             </button>
             <div>
               <p className="text-sm text-gray-500">{greeting} {t("home.salam")}</p>
-              <h2 className="text-xl font-bold">{userData.fullName || t("home.guest")}</h2>
+              <h2 className="text-lg font-bold sm:text-xl">{userData.fullName || t("home.guest")}</h2>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
+              onClick={() => router.push("/notifications")}
+              className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white shadow-lg ring-1 ring-emerald-50"
+              aria-label="Notifications"
+            >
+              <Bell size={22} className="text-emerald-700" />
+              {unreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-bold text-white">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+            <button
               onClick={() => router.push("/prayer")}
-              className="rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 px-4 py-2 text-sm font-semibold text-white"
+              className="rounded-2xl bg-gradient-to-r from-emerald-500 to-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg"
             >
               {t("home.prayer")}
             </button>
-            <div className="flex items-center gap-2">
-              <ThemeControls />
-              <DownloadButton />
-            </div>
           </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-3 gap-3 sm:grid-cols-6">
+          {QUICK_ACTIONS.map((item) => (
+            <button
+              key={item.key}
+              onClick={() => router.push(item.path)}
+              className="flex flex-col items-center gap-1.5 rounded-3xl bg-white p-3 shadow-lg ring-1 ring-emerald-50/50 transition hover:ring-2 hover:ring-emerald-300 active:scale-95"
+            >
+              <span className="text-2xl">{item.icon}</span>
+              <span className="text-center text-[11px] font-bold text-gray-700">
+                {t(`feature.${item.key}`)}
+              </span>
+            </button>
+          ))}
         </div>
 
         {profileIncomplete && (
@@ -351,11 +378,11 @@ export default function HomePage() {
         {/* Explore / Feature grid */}
         <div className="mt-14">
           <div className="flex items-center justify-between">
-            <h2 className="text-3xl font-bold">{t("home.explore")}</h2>
-            <p className="text-gray-500">{t("home.exploreDesc")}</p>
+            <h2 className="text-xl font-bold sm:text-3xl">{t("home.explore")}</h2>
+            <p className="hidden text-gray-500 sm:block">{t("home.exploreDesc")}</p>
           </div>
 
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {FEATURES.map((item, index) => (
               <motion.button
                 key={item.key}
@@ -365,20 +392,19 @@ export default function HomePage() {
                 whileHover={{ y: -4, scale: 1.02 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => router.push(item.path)}
-                className="relative flex items-center gap-4 rounded-3xl bg-white p-5 text-left shadow-lg ring-1 ring-emerald-50/50 transition"
+                className="relative flex items-center gap-4 rounded-3xl bg-white p-4 text-left shadow-lg ring-1 ring-emerald-50/50 transition"
               >
                 {item.key === "community" && unreadCount > 0 && (
                   <span className="absolute right-3 top-3 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-bold text-white">
                     {unreadCount}
                   </span>
                 )}
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-600 to-green-700 text-2xl shadow-md">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-600 to-green-700 text-2xl shadow-md">
                   {item.icon}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="truncate text-lg font-bold text-gray-800">{t(`feature.${item.key}`)}</h3>
-                  <p className="truncate text-sm text-gray-500">{t(`feature.${item.key}Desc`)}</p>
-                  <p className="mt-1 text-sm font-semibold text-emerald-700">{t("feature.open")}</p>
+                  <h3 className="truncate font-bold text-gray-800">{t(`feature.${item.key}`)}</h3>
+                  <p className="truncate text-xs text-gray-500">{t(`feature.${item.key}Desc`)}</p>
                 </div>
               </motion.button>
             ))}
@@ -387,8 +413,8 @@ export default function HomePage() {
 
         <div className="mt-14">
           <div className="flex items-center justify-between">
-            <h2 className="text-3xl font-bold">{t("home.dashboardTitle")}</h2>
-            <p className="text-gray-500">{t("home.dashboardSubtitle")}</p>
+            <h2 className="text-xl font-bold sm:text-3xl">{t("home.dashboardTitle")}</h2>
+            <p className="hidden text-gray-500 sm:block">{t("home.dashboardSubtitle")}</p>
           </div>
 
           <div className="mt-8 grid gap-6 lg:grid-cols-3">
@@ -465,15 +491,6 @@ export default function HomePage() {
               </div>
             </div>
           )}
-
-          <div className="mt-6 flex justify-end">
-            <button
-              onClick={handleLogout}
-              className="text-sm font-semibold text-gray-500 hover:text-red-600"
-            >
-              {t("home.logout")}
-            </button>
-          </div>
         </div>
       </div>
     </main>

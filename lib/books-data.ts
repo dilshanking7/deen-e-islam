@@ -13,6 +13,7 @@ export const BOOKS: BookDef[] = [
       "A complete collection of Shariah rulings — Taharah, Wudu, Ghusl, Prayer, Zakat, Fasting, Hajj, Qurbani and more.",
     icon: "📜",
     accent: "from-emerald-700 to-green-800",
+    pdf: "/pdfs/qanun-e-shariyat.pdf",
     chapters: [
       {
         id: "taharah",
@@ -178,6 +179,7 @@ export const BOOKS: BookDef[] = [
       "The famous comprehensive book teaching Muslim women the rulings of Taharah, Prayer, Fasting, Zakat, Hajj, Nikah, Purdah and household matters.",
     icon: "💎",
     accent: "from-purple-700 to-pink-700",
+    pdf: "/pdfs/jannati-zevar.pdf",
     chapters: [
       {
         id: "taharat",

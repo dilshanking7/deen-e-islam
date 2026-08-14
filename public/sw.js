@@ -1,15 +1,20 @@
-const CACHE = "islaam-e-deen-v1";
+const CACHE = "islaam-e-deen-v2";
 
 const CORE_ASSETS = [
   "/",
   "/home",
   "/login",
   "/quran",
+  "/quran/mushaf",
+  "/quran/translation",
   "/prayer",
   "/dua",
   "/qibla",
   "/calendar",
   "/hadith",
+  "/books",
+  "/history",
+  "/privacy-policy",
   "/community",
   "/manifest.webmanifest",
   "/logo.png",
@@ -64,8 +69,10 @@ self.addEventListener("fetch", (event) => {
     caches.match(request).then((cached) => {
       const network = fetch(request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((cache) => cache.put(request, copy));
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((cache) => cache.put(request, copy));
+          }
           return res;
         })
         .catch(() => cached);

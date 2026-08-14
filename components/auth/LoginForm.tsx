@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { sendEmailVerification } from "firebase/auth";
 import { loginUser, loginWithGoogle, resetPassword } from "@/lib/auth";
 import { getUserProfile, findUserByUsername } from "@/lib/firestore";
+import { waitForAuthUser } from "@/lib/auth-state";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -25,6 +26,20 @@ export default function LoginForm() {
   const [success, setSuccess] = useState("");
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    waitForAuthUser()
+      .then(async (user) => {
+        if (!active || !user) return;
+        const profile = await getUserProfile(user.uid);
+        router.replace(profile?.completedOnboarding ? "/home" : "/welcome");
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   const handleForgotPassword = async () => {
     setError("");
@@ -180,12 +195,12 @@ export default function LoginForm() {
       onSubmit={handleLogin}
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.7 }}
-      className="mt-8 space-y-5"
+      transition={{ duration: 0.6 }}
+      className="mt-5 space-y-3.5"
     >
       {/* Email / Username */}
       <div>
-        <label className="mb-2 block text-sm font-medium text-gray-600">
+        <label className="mb-1.5 block text-xs font-medium text-gray-600">
           Email or Username
         </label>
         <input
@@ -194,13 +209,13 @@ export default function LoginForm() {
           onChange={(e) => setIdentifier(e.target.value)}
           autoComplete="email"
           placeholder="Enter your email or username"
-          className="w-full rounded-2xl border border-gray-200 bg-white px-5 py-4 outline-none transition-all duration-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+          className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition-all duration-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
         />
       </div>
 
       {/* Password */}
       <div>
-        <label className="mb-2 block text-sm font-medium text-gray-600">
+        <label className="mb-1.5 block text-xs font-medium text-gray-600">
           Password
         </label>
         <div className="relative">
@@ -210,12 +225,12 @@ export default function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
             placeholder="Enter your password"
-            className="w-full rounded-2xl border border-gray-200 bg-white px-5 py-4 pr-14 outline-none transition-all duration-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+            className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 pr-12 text-sm outline-none transition-all duration-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-5 top-1/2 -translate-y-1/2"
+            className="absolute right-4 top-1/2 -translate-y-1/2"
           >
             {showPassword ? "🙈" : "👁"}
           </button>
@@ -224,7 +239,7 @@ export default function LoginForm() {
 
       {/* Remember */}
       <div className="flex items-center justify-between">
-        <label className="flex items-center gap-2 text-sm text-gray-600">
+        <label className="flex items-center gap-2 text-xs text-gray-600">
           <input
             type="checkbox"
             checked={rememberMe}
@@ -240,7 +255,7 @@ export default function LoginForm() {
             setSuccess("");
             setForgotOpen(true);
           }}
-          className="text-sm font-medium text-emerald-700 hover:underline"
+          className="text-xs font-medium text-emerald-700 hover:underline"
         >
           Forgot Password?
         </button>
@@ -300,14 +315,14 @@ export default function LoginForm() {
         whileTap={{ scale: 0.98 }}
         disabled={loading}
         type="submit"
-        className="w-full rounded-2xl bg-gradient-to-r from-emerald-700 via-green-700 to-emerald-800 py-4 text-lg font-bold text-white shadow-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+        className="w-full rounded-2xl bg-gradient-to-r from-emerald-700 via-green-700 to-emerald-800 py-3.5 text-base font-bold text-white shadow-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
       >
         {loading ? "Authenticating..." : "Login Securely"}
       </motion.button>
 
-      <div className="relative py-2">
+      <div className="relative py-1.5">
         <div className="absolute left-0 right-0 top-1/2 h-px bg-gray-200" />
-        <p className="relative mx-auto w-fit bg-white px-3 text-sm text-gray-400">
+        <p className="relative mx-auto w-fit bg-white px-3 text-xs text-gray-400">
           OR
         </p>
       </div>
@@ -318,7 +333,7 @@ export default function LoginForm() {
         type="button"
         onClick={handleGoogleLogin}
         disabled={loading}
-        className="flex w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white py-4 font-semibold shadow-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white py-3 text-sm font-semibold shadow-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <svg className="h-5 w-5" viewBox="0 0 48 48">
           <path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.3 6.1 29.4 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/>

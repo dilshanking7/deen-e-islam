@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Bookmark, History, BookOpen } from "lucide-react";
 import { auth } from "@/lib/firebase";
+import { waitForAuthUser } from "@/lib/auth-state";
 import { getBookmarks, type BookmarkData } from "@/lib/quran-bookmark";
 import { getLastRead, type LastReadData } from "@/lib/quran-history";
 import ThemeControls from "@/components/ui/ThemeControls";
@@ -26,7 +27,7 @@ export default function ProgressPage() {
 
   useEffect(() => {
     async function load() {
-      const user = auth.currentUser;
+      const user = auth.currentUser || (await waitForAuthUser());
       if (!user) {
         router.push("/login");
         return;

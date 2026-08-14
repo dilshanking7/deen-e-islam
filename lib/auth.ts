@@ -11,15 +11,24 @@ import {
   signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
+  setPersistence,
+  browserLocalPersistence,
 } from "firebase/auth";
 
 import { auth } from "./firebase";
 import { ensureUserProfile } from "./firestore";
 
+async function keepUserSignedIn() {
+  if (typeof window === "undefined") return;
+  await setPersistence(auth, browserLocalPersistence);
+}
+
 export async function registerUser(
   email: string,
   password: string
 ) {
+  await keepUserSignedIn();
+
   const userCredential = await createUserWithEmailAndPassword(
     auth,
     email,
@@ -36,6 +45,8 @@ export async function loginUser(
   email: string,
   password: string
 ) {
+  await keepUserSignedIn();
+
   const userCredential = await signInWithEmailAndPassword(
     auth,
     email,
@@ -46,6 +57,8 @@ export async function loginUser(
 }
 
 export async function loginWithGoogle() {
+  await keepUserSignedIn();
+
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
 

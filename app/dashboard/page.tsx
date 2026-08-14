@@ -14,6 +14,7 @@ import {
   HeartHandshake,
 } from "lucide-react";
 import { auth } from "@/lib/firebase";
+import { waitForAuthUser } from "@/lib/auth-state";
 import { getUserProfile } from "@/lib/firestore";
 import { getRandomVerse } from "@/lib/daily-verse";
 
@@ -25,7 +26,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function load() {
-      const user = auth.currentUser;
+      const user = auth.currentUser || (await waitForAuthUser());
       if (!user) {
         router.push("/login");
         return;

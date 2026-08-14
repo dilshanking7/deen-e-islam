@@ -16,10 +16,17 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
+  Play,
+  Square,
 } from "lucide-react";
 
 import { getMushafPage, TOTAL_PAGES } from "@/lib/mushaf-api";
 import { saveBookmark, getBookmark } from "@/lib/mushaf-bookmark";
+import {
+  getAyahAudioUrl,
+  getOnlineAyahAudioUrl,
+  getPageAyahs,
+} from "@/lib/quran-page-audio";
 
 function MushafContent() {
   const router = useRouter();
@@ -51,10 +58,14 @@ function MushafContent() {
   const [loading, setLoading] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [playingPage, setPlayingPage] = useState(false);
+  const [playingAyah, setPlayingAyah] = useState("");
 
   // Zoom States
   const [zoomScale, setZoomScale] = useState(1);
   const imageContainerRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const stopAudioRef = useRef(false);
 
   // Load saved page from bookmark on mount (skip when opened via ?page= URL)
   useEffect(() => {
@@ -90,6 +101,14 @@ function MushafContent() {
     localStorage.setItem("last-mushaf-page", page.toString());
   }, [page]);
 
+  useEffect(() => {
+    stopPageAudio();
+  }, [page]);
+
+  useEffect(() => {
+    return () => stopPageAudio();
+  }, []);
+
   // Preload Next & Previous Pages
   useEffect(() => {
     const next = new window.Image();
@@ -121,6 +140,48 @@ function MushafContent() {
       setLoading(false);
     }, 100);
   }, [page, updateURL]);
+
+  function stopPageAudio() {
+    stopAudioRef.current = true;
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setPlayingPage(false);
+    setPlayingAyah("");
+  }
+
+  async function playAudioSource(src: string) {
+    return new Promise<void>((resolve, reject) => {
+      const audio = new Audio(src);
+      audioRef.current = audio;
+      audio.onended = () => resolve();
+      audio.onerror = () => reject();
+      audio.play().catch(reject);
+    });
+  }
+
+  async function playCurrentPage() {
+    if (playingPage) {
+      stopPageAudio();
+      return;
+    }
+    const ayahs = getPageAyahs(page);
+    if (ayahs.length === 0) return;
+    stopAudioRef.current = false;
+    setPlayingPage(true);
+    for (const item of ayahs) {
+      if (stopAudioRef.current) break;
+      setPlayingAyah(`${item.surah}:${item.ayah}`);
+      await playAudioSource(getAyahAudioUrl(item.surah, item.ayah)).catch(() =>
+        playAudioSource(getOnlineAyahAudioUrl(item.surah, item.ayah)).catch(() => {})
+      );
+    }
+    if (!stopAudioRef.current) {
+      setPlayingPage(false);
+      setPlayingAyah("");
+    }
+  }
 
   const goPrevious = useCallback(() => {
     if (page <= 1) return;
@@ -252,6 +313,20 @@ function MushafContent() {
             )}
 
             <div className="h-5 w-[1px] bg-zinc-300 dark:bg-zinc-800 mx-1" />
+
+            <button
+              onClick={playCurrentPage}
+              title={playingPage ? "Stop Page Audio" : "Play Page Audio"}
+              className={`rounded-xl p-2 transition active:scale-95 ${
+                playingPage
+                  ? "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300"
+                  : darkMode
+                  ? "bg-zinc-900 text-emerald-400 hover:bg-zinc-800"
+                  : "bg-emerald-100/70 text-emerald-800 hover:bg-emerald-100"
+              }`}
+            >
+              {playingPage ? <Square size={19} /> : <Play size={19} />}
+            </button>
 
             <button
               onClick={async () => {
@@ -423,7 +498,7 @@ function MushafContent() {
                   Page {page}
                 </span>
                 <span className="block text-xs text-zinc-400">
-                  of {TOTAL_PAGES}
+                  {playingAyah ? `Playing ${playingAyah}` : `of ${TOTAL_PAGES}`}
                 </span>
               </div>
 

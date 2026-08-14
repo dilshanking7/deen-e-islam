@@ -177,6 +177,14 @@ export default function RegisterForm() {
       >
         {loading ? "Creating Account..." : "Create Account"}
       </motion.button>
+
+      <button
+        type="button"
+        onClick={() => router.push("/login")}
+        className="w-full rounded-2xl border border-emerald-100 bg-white py-3 text-sm font-bold text-emerald-700 transition hover:bg-emerald-50"
+      >
+        Already have an account? Login
+      </button>
     </motion.form>
   );
 }
