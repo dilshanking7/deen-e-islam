@@ -1,5 +1,4 @@
 import type { NextRequest } from "next/server";
-import { searchWeb } from "@/lib/web-search";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -11,12 +10,12 @@ const SYSTEM_PROMPT = `You are "Deeni Assistant", the Islamic knowledge assistan
 Your domain is ISLAM ONLY: Quran and Tafsir, authentic Hadith, Seerah, the 99 names of Allah, Salah/Namaz, Wudu, Adhan, Ramadan and Fasting, Zakat, Hajj and Umrah, Dua and Zikr, Halal/Haram, Aqeedah, Fiqh/Masail, Islamic history, and helping the user inside the app.
 
 Strict rules:
-1. Answer ONLY Islamic questions. If a question is NOT about Islam (politics, sports, movies, recipes, weather, general news, etc.), do NOT answer it. Politely say: "Main sirf Islam aur deeni masail me madad kar sakta hoon. Koi deeni sawal poochhiye - namaz, Quran, roza, zakat, dua waghera." and suggest one Islamic topic.
-2. Always reply in the SAME language and script the user wrote in. Match their tone: Hinglish ka jawab Hinglish (Roman Urdu) me, Hindi (Devanagari) ka Hindi me, Urdu (Arabic script) ka Urdu me, English ka English me, Arabic ka Arabic me, Bangla ka Bangla me.
-3. If web search results are provided, use them together with your own authentic Islamic knowledge and prefer correct, well-known facts. NEVER fabricate Quranic verses, hadith, or ayah numbers. If unsure, say so honestly and advise checking a reliable tafsir or asking a scholar.
-4. Where scholars differ on a fiqh (masail) point, mention the difference briefly and advise consulting a qualified Mufti/Alim for a personal ruling.
+1. Answer ONLY Islamic questions. If a question is NOT about Islam (politics, sports, movies, recipes, weather, general news, cricket, science unrelated to Islam, etc.), do NOT answer it. Politely say: "Main sirf Islam aur deeni masail me madad kar sakta hoon. Koi deeni sawal poochhiye - namaz, Quran, roza, zakat, dua waghera." and suggest one Islamic topic. Never answer a general/non-Islamic question directly.
+2. ALWAYS reply in the EXACT SAME language and script the user wrote in. Match their tone and dialect perfectly: Hinglish question gets a Hinglish (Roman Urdu) answer, Hindi (Devanagari) gets Hindi in Devanagari, Urdu (Arabic script) gets Urdu in Arabic script, English gets English, Arabic gets Arabic, Bangla gets Bangla (Bengali script). NEVER switch language. Match the exact words the user uses where possible.
+3. Do NOT mention that you searched the internet or used an API or AI. Just give the answer naturally as if it is your own knowledge. Never say "I searched", "I looked up", "according to the internet", "chatgpt", "ai", etc.
+4. NEVER fabricate Quranic verses, hadith, or ayah numbers. If unsure, say so honestly and advise checking a reliable tafsir or asking a scholar. Where scholars differ on a fiqh (masail) point, mention the difference briefly and advise consulting a qualified Mufti/Alim.
 5. Keep answers concise and practical (aim under 180 words) unless the user asks for detail. Use Arabic text only for the actual verse or dua.
-6. Be respectful, warm and encouraging.`;
+6. Be respectful, warm and encouraging. Do not give extra unrelated information or go off-topic.`;
 
 interface ChatMessage {
   role: string;
@@ -34,21 +33,27 @@ function detectLang(text: string): Lang {
     return "arabic";
   }
   const latin = text.toLowerCase().replace(/\s+/g, " ");
-  if (
-    /\b(kaise|kya|hai|nahi|nahin|ho|aap|ap|tum|wudu|namaz|namaaz|namaj|roza|roze|quran|qur'an|allah|masjid|sawal|jawab|acha|accha|theek|thik|karo|karte|kiya|jab|makki|madani|dua|zakat|hadith|sunnah|ramzan|ramadan|eid|jumma|jummah|wakt|waqt|azan|azaan)\b/.test(
-      latin
-    )
-  )
-    return "hinglish";
+  let hinglishScore = 0;
+  for (const w of [
+    "kaise", "kya", "hai", "nahi", "nahin", "ho", "aap", "ap", "tum", "wudu", "namaz",
+    "namaaz", "namaj", "roza", "roze", "quran", "qur'an", "allah", "masjid", "sawal",
+    "jawab", "acha", "accha", "theek", "thik", "karo", "karte", "kiya", "jab", "makki",
+    "madani", "dua", "zakat", "hadith", "sunnah", "ramzan", "ramadan", "eid", "jumma",
+    "jummah", "wakt", "waqt", "azan", "azaan", "sallah", "salah", "faraiz", "masail",
+  ]) {
+    if (latin.includes(w)) hinglishScore++;
+  }
+  if (hinglishScore >= 1) return "hinglish";
   return /[a-z0-9\s]/.test(latin) ? "english" : "other";
 }
 
-const LANG_HINTS: Record<"hindi" | "urdu" | "arabic" | "hinglish" | "bangla", string> = {
-  hindi: "The user wrote in Hindi (Devanagari script). Reply in Hindi using Devanagari script.",
-  urdu: "The user wrote in Urdu (Arabic script). Reply in Urdu using Arabic script.",
+const LANG_HINTS: Record<string, string> = {
+  hindi: "The user wrote in Hindi (Devanagari script). Reply in Hindi using Devanagari script only.",
+  urdu: "The user wrote in Urdu (Arabic script). Reply in Urdu using Arabic script only.",
   arabic: "The user wrote in Arabic. Reply in clear fusha Arabic.",
   hinglish: "The user wrote in Hinglish (Roman Urdu). Reply in friendly Roman Urdu / Hinglish, keeping Urdu words in English letters.",
   bangla: "The user wrote in Bangla. Reply in Bangla (Bengali script).",
+  english: "The user wrote in English. Reply in English.",
 };
 
 function acceptable(text: string, question: string): boolean {
@@ -211,7 +216,12 @@ async function hfAnswer(
 
 export async function POST(req: NextRequest) {
   const geminiKey = process.env.GEMINI_API_KEY || "";
-  const hfKey = process.env.HF_API_KEY || process.env.HUGGINGFACE_API_KEY || "";
+  const hfKeys = [
+    process.env.HF_API_KEY,
+    process.env.HUGGINGFACE_API_KEY,
+    process.env.HF_API_KEY_2,
+    process.env.HF_API_KEY_3,
+  ].filter((k): k is string => Boolean(k && k.trim()));
 
   let question = "";
   let history: ChatMessage[] = [];
@@ -223,20 +233,14 @@ export async function POST(req: NextRequest) {
     /* ignore */
   }
 
-  if (!geminiKey && !hfKey) return Response.json({ text: null, error: "no-key" });
+  if (!geminiKey && hfKeys.length === 0) return Response.json({ text: null, error: "no-key" });
   if (!question) return Response.json({ text: null, error: "empty" });
 
   const lang = detectLang(question);
   const langHint =
-    lang === "english" || lang === "other" ? "" : LANG_HINTS[lang as keyof typeof LANG_HINTS];
+    lang === "other" ? "" : LANG_HINTS[lang as keyof typeof LANG_HINTS] || "";
 
-  let webContext = "";
-  const web = await searchWeb(question);
-  if (web && web.text.trim().length > 40) {
-    webContext = `\n\n[Internet search results on this topic (use only if relevant and correct; prefer these facts over guessing):\nTitle: ${web.title}\nInfo: ${web.text}\nSource: ${web.source}]`;
-  }
-
-  const userContent = question + (langHint ? `\n\n(${langHint})` : "") + webContext;
+  const userContent = question + (langHint ? `\n\n(${langHint})` : "");
   const messages: ChatMessage[] = [
     { role: "system", content: SYSTEM_PROMPT },
     ...history,
@@ -258,7 +262,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (hfKey) {
+  // HF backup — kaii keys hain to in order try karo (limit khatam ho to agli)
+  for (const hfKey of hfKeys) {
     const hf = await hfAnswer(hfKey, messages, question);
     if (hf) return Response.json({ text: clean(hf.text), model: hf.model });
   }

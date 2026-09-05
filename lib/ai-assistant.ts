@@ -1,5 +1,4 @@
 import knowledge from "./ai-knowledge.json";
-import { searchWeb, type WebResult } from "./web-search";
 import { lookupVerse, surahStartPage } from "./quran-lookup";
 
 export interface AiLink {
@@ -7,11 +6,18 @@ export interface AiLink {
   path: string;
 }
 
+interface AiWebResult {
+  title: string;
+  text: string;
+  url: string;
+  source: string;
+}
+
 export interface AiAnswer {
   title: string;
   answer: string;
   links: AiLink[];
-  web?: WebResult | null;
+  web?: AiWebResult | null;
   aiModel?: string;
 }
 
@@ -300,17 +306,15 @@ export async function getAiAnswerAsync(rawQuery: string, history: AiHistoryItem[
     }
   } catch {}
 
-  // 3) Local knowledge base (books + masail training)
+  // 3) Local knowledge base (books + masail training) — PHLAI LOCAL JAWAB (credit bachao)
   const matches = matchIntents(q);
-  if (matches.length > 0) {
-    const strong = matches[0].score >= 90;
-    if (strong) {
-      const answer = buildAnswer(matches[0].intent);
-      return applyRepeatNote(answer, matches[0].intent.title);
-    }
+  const strongMatch = matches.find((m) => m.score >= 70);
+  if (strongMatch) {
+    const answer = buildAnswer(strongMatch.intent);
+    return applyRepeatNote(answer, strongMatch.intent.title);
   }
 
-  // 3.5) Free AI (Hugging Face) - kisi bhi sawal ka jawab
+  // 4) Free AI (Gemini/HF) — jab local ka pakka jawab na ho tab hi API use karo
   const hf = await queryHuggingFace(rawQuery, history);
   if (hf) {
     return {
@@ -324,25 +328,7 @@ export async function getAiAnswerAsync(rawQuery: string, history: AiHistoryItem[
     };
   }
 
-  // 4) Internet se kuch dhoondhein
-  const web = await searchWeb(rawQuery);
-  if (web) {
-    const info =
-      `Main internet par jhhaant kar is sawal ka jawaab laaya hoon:\n\n${web.text}\n\n` +
-      `Ziyada chahhiye to neeche diye link par padhein.`;
-    return {
-      title: web.title,
-      answer: info,
-      links: [
-        { label: `${web.source} par ziyada padhein`, path: web.url },
-        { label: "Namaz ke waqt", path: "/prayer" },
-        { label: "Quran", path: "/quran/read" },
-      ],
-      web,
-    };
-  }
-
-  // 4.5) Weak KB match ho to wahi jawab
+  // 5) API na chale to weak local match hi de do
   if (matches.length > 0) {
     const answer = buildAnswer(matches[0].intent);
     return applyRepeatNote(answer, matches[0].intent.title);

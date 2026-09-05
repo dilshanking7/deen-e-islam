@@ -180,12 +180,6 @@ export default function AssistantWidget() {
                       >
                         {msg.text}
 
-                        {msg.answer && msg.answer.web && (
-                          <p className="mt-2 text-[10px] font-semibold text-emerald-500">
-                            Web se liya gaya • {msg.answer.web.source}
-                          </p>
-                        )}
-
                         {msg.answer && msg.answer.aiModel && (
                           <p className="mt-2 text-[10px] font-semibold text-emerald-500">
                             AI se jawab • {msg.answer.aiModel}

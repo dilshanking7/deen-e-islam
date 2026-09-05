@@ -110,12 +110,6 @@ export default function AssistantPage() {
                 >
                   {msg.text}
 
-                  {msg.answer && msg.answer.web && (
-                    <p className="mt-2 text-[10px] font-semibold text-emerald-500">
-                      Web se liya gaya • {msg.answer.web.source}
-                    </p>
-                  )}
-
                   {msg.answer && msg.answer.links.length > 0 && (
                     <div className="mt-4 flex flex-wrap gap-2">
                       {msg.answer.links.map((link) => (

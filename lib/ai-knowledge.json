@@ -903,12 +903,274 @@
     },
     {
       "keys": [
+        "kalma",
+        "kalimah",
+        "kalima",
+        "kalime",
+        "shahadat",
+        "6 kalme",
+        "chaar kalme",
+        "pachelis kalme",
+        "chahar kalma"
+      ],
+      "title": "Kalimah (Kalma)",
+      "answer": "Islam ke 6 Kalme hain. Pehla Kalma Tayyibah: \"La ilaha illallah, Muhammadur Rasoolullah\" (Allah ke siwa koi mabood nahi, Muhammad ﷺ Allah ke Rasool hain). Duj: Kalma Shahadat (\"Ash-hadu an la ilaha illallahu wahdahu la sharika lahu...\"). Kalma Istighfar, Kalma Tauheed, Kalma Radd-e-Kufr waghera bhi hain.\n\nKalme zuban se kahein aur dil se tasdeeq karein — ye imaan ki buniyad hai.",
+      "links": [
+        {
+          "label": "Aqeedah parhein",
+          "path": "/quran/read"
+        }
+      ]
+    },
+    {
+      "keys": [
+        "durood",
+        "durud",
+        "salawat",
+        "durood sharif",
+        "salam un nabi",
+        "darood"
+      ],
+      "title": "Durood Sharif",
+      "answer": "Durood Sharif parhne ka matlab hai Nabi ﷺ par salam aur rehmat ki dua. Sab se mash-hoor Durood-e-Ibrahim hai jo namaz ke tashahhud me parha jata hai: \"Allahumma salli ala Muhammadin wa ala aali Muhammad...\"\n\nJis par ek durood, Allah us par das rehmatein bhejta hai. Rozana durood parhne ki aadat banayein.",
+      "links": [
+        {
+          "label": "Dua section",
+          "path": "/dua"
+        }
+      ]
+    },
+    {
+      "keys": [
+        "istighfar",
+        "astaghfar",
+        "tauba",
+        "toba",
+        "maghfirat",
+        "gunah",
+        "pap",
+        "sin"
+      ],
+      "title": "Istighfar aur Taubah",
+      "answer": "Istighfar ka matlab hai Allah se gunahon ki maghfirat maangna. Sab se aasan istighfar: \"Astaghfirullah\" — aur mazeed: \"Astaghfirullaha rabbi min kulli zambin wa atubu ilaih\" (Mujhe Allah se maghfirat chahiye har gunah se, aur main uski taraf palta hoon).\n\nAllah taubah karnay walon se bahut mohabbat karta hai. Ikhlaas se taubah aur na karne ka azm — Allah maghfirat farmata hai.",
+      "links": [
+        {
+          "label": "Duain dekhein",
+          "path": "/dua"
+        }
+      ]
+    },
+    {
+      "keys": [
+        "azaan ka jawab",
+        "azaan jawab",
+        "adhan ka jawab",
+        "azaan ka",
+        "muazzin"
+      ],
+      "title": "Azaan ka Jawab",
+      "answer": "Azaan suntay waqt sunnat ye hai ke azaan ke kalimat same sun kar jawab diya jaye: muazzin \"Allahu Akbar\" kahe to \"Allahu Akbar\", \"Ash-hadu an la ilaha illallah\" kahe to wahi kahein, magar \"Hayya alal-salah\" aur \"Hayya alal-falah\" par \"La hawla wa la quwwata illa billah\" kahein.\n\nAzaan ke baad durood parhein aur ye dua: \"Allahumma rabba hazihil da'wati-tammati was-salatil qaa'imati, aati Muhammadan al-waseelata wal-fadeelata...\"",
+      "links": [
+        {
+          "label": "Namaz ke waqt",
+          "path": "/prayer"
+        }
+      ]
+    },
+    {
+      "keys": [
+        "music",
+        "mujic",
+        "song",
+        "gaana",
+        "gana",
+        "baynstrument",
+        "instrument",
+        "dhun"
+      ],
+      "title": "Music aur Gaana",
+      "answer": "Jamhoor ulama ke nazdeek music instruments aur geet (jo fahashi aur haraam cheezon par mushtamil ho) haraam hain. Naat aur hamd (bina music ke) jaiz hain.\n\nJo halal mele (allowed) hain unka imtinaa karna behtar hai. Dil ki tareeq se dua aur zikr ko apnayen — bura saath aur aadat se bachein.",
+      "links": [
+        {
+          "label": "Naat sunein",
+          "path": "/naat"
+        },
+        {
+          "label": "Tasbeeh kholen",
+          "path": "/tasbeeh"
+        }
+      ]
+    },
+    {
+      "keys": [
+        "sood",
+        "interest",
+        "riba",
+        "riya",
+        "sodh",
+        "bank interest",
+        "loan interest"
+      ],
+      "title": "Sood (Riba) Haraam",
+      "answer": "Sood (riba) Quran me khatta karam (strictly) haraam hai. Allah ne riba ko haraam kiya aur uskay baare me shadeed waid (warning) di hai. Bank ka interest, qarz par lene-dene ka sood — sab riba hota hai.\n\nHalal rizq talash karein aur sood se bachein. Agar kahin unwittingly shamil ho gaye to taubah karein aur mamla halal tareeqe se set karein.",
+      "links": [
+        {
+          "label": "Quran parhein",
+          "path": "/quran/read"
+        }
+      ]
+    },
+    {
+      "keys": [
+        "taweez",
+        "amulet",
+        "jadu",
+        "sihr",
+        "nazar",
+        "tabeez",
+        "jhool",
+        "taweez kya"
+      ],
+      "title": "Taweez aur Jadu",
+      "answer": "Jadu (sihr) aur jinnat se madad maangna haraam hai. Shaytan aur jinnat ke zariye se ilaaj ya taweez jin me kalamat ya quran ki aayatein hoon un par ulama e ikhtelaf hai, lekin jadu se bachao ka sab se behtar tarika hai Quran aur sunnat ki duaayein — Ayatul Kursi, Surah Fatiha, Mu'awwidhat (Falaq-o-Naas), aur zam-zam waghera peena.\n\nJadu ka asar Allah ke hukm ke ba'is hi hota hai. Sab se ziyada roohani ilaaj Quran aur sunnat wale deRoob main hai. Nazar-e-bad se bachne ke liye \"Ma sha Allah\" aur durood parhna watchabi aamal hai.",
+      "links": [
+        {
+          "label": "Duain dekhein",
+          "path": "/dua"
+        },
+        {
+          "label": "Quran parhein",
+          "path": "/quran/read"
+        }
+      ]
+    },
+    {
+      "keys": [
+        "miswak",
+        "misvak",
+        "meswak",
+        "datun",
+        "neem ke dahi"
+      ],
+      "title": "Miswak",
+      "answer": "Miswak Nabi ﷺ ki sunnat hai. Unho ne farmaya: \"Miswak moun ki paakiza-gi aur Allah ki raza ka zariya hai.\" Miswak har namaz se pehle aur wudu ke waqt istemal karna sunnat hai.\n\nMiswak se moun saaf hota hai, boo khatam hoti hai aur thawaab milta hai.",
+      "links": [
+        {
+          "label": "Wudu sunnaten",
+          "path": "/books/kaanoon-e-shariat?chapter=wudu-sunnat"
+        }
+      ]
+    },
+    {
+      "keys": [
+        "daadhi",
+        "daari",
+        "beard",
+        "dhadhi",
+        "roosh"
+      ],
+      "title": "Daadhi (Beard)",
+      "answer": "Daadhi rakhna jamhoor ulama ke nazdeek sunnat hai, kuch ulma ka kehna hai ke wajib (farz) bhi ho sakti hai. Nabi ﷺ ne daadhi rakhne ka hukm diya. Musalman mard ko daadhi rakhna chahiye aur kam se kam ek musi-muth (fist) se ziyada katwana munasib nahi.",
+      "links": [
+        {
+          "label": "Hadith parhein",
+          "path": "/hadith"
+        }
+      ]
+    },
+    {
+      "keys": [
+        "sabr",
+        "saber",
+        "sabir",
+        "sukoon",
+        "chinta",
+        "pareshan",
+        "tension",
+        "gham",
+        "ulaula"
+      ],
+      "title": "Sabr aur Sukoon",
+      "answer": "Sabr (patience) momin ki pehchan hai. Quran me Allah farmata hai: \"Beshaq Allah un ke saath hai jo sabr karte hain\" (Surah Baqarah). Mushk il aur takleef Allah ke imtihaan hote hain aur sabr karne par be-hesab ajr milta hai.\n\nTakleef me wudu karke 2 rakat namaz parhein, istighfar aur dua karein. Har mushkil ke baad aam-e-raah (easy) aati hai — Allah ka waada hai: \"Beshiq mushkil ke saath aasani hai.\"",
+      "links": [
+        {
+          "label": "Duain dekhein",
+          "path": "/dua"
+        },
+        {
+          "label": "Tasbeeh kholen",
+          "path": "/tasbeeh"
+        }
+      ]
+    },
+    {
+      "keys": [
+        "ayatul kursi",
+        "ayat al kursi",
+        "kursi",
+        "aayat kursi"
+      ],
+      "title": "Ayatul Kursi",
+      "answer": "Ayatul Kursi Surah Baqarah (2:255) ki aayat hai. Ye Quran ki sab se azimat wali aayat kehlati hai. Ise raat so kar parhne wale ki hafizat Allah karta hai.\n\nHar farz namaz ke baad parhne ki bhi hadith me targheeb hai. Ayatul Kursi parhkar kisi se qarib na ho to hifazat rahti hai.",
+      "links": [
+        {
+          "label": "Quran parhein",
+          "path": "/quran/read"
+        }
+      ]
+    },
+    {
+      "keys": [
+        "namaz ka tarika",
+        "namaz kaise",
+        "namaz kese",
+        "namaz padhna",
+        "namaz kaise padhe",
+        "namaz ka tareeqa",
+        "namaz step"
+      ],
+      "title": "Namaz ka Tarika",
+      "answer": "Namaz ke andar ye cheezein hoti hain: (1) Niyat, (2) Takbeer-e-Tahrima (\"Allahu Akbar\" kehte hue haath bandhna), (3) Qiyam me Sana, A'udhu-Bismillah, Surah Fatiha aur koi surah, (4) Ruku (kam se kam 3 bar — Subhana Rabbiyal Azeem), (5) Sajdah (2 bar — Subhana Rabbiyal A'la), (6) Baithna aur Tashahhud, (7) Salam.\n\n2 rakat me phir Ruku-Sajdah hoga, 3 ya 4 rakat wale agar andar beech me Tashahhud ke baad uthna hota hai. Mukammal tarz ke liye Qanun-e-Shariyat ka Namaz chapter parhein.",
+      "links": [
+        {
+          "label": "Namaz ke faraiz",
+          "path": "/books/kaanoon-e-shariat?chapter=namaz-faraiz"
+        },
+        {
+          "label": "Namaz ke wajibat",
+          "path": "/books/kaanoon-e-shariat?chapter=namaz-wajibat"
+        }
+      ]
+    },
+    {
+      "keys": [
+        "ucch",
+        "ochh",
+        "umr",
+        "shehzada",
+        "aulaad",
+        "bache kya",
+        "hamal",
+        "chain",
+        "rizq"
+      ],
+      "title": "Aulad aur Rizq",
+      "answer": "Aulad Allah ka tohfa hai. Aulad ki dua karna sunnat hai — \"Rabbana hab lana min azwajina wa zurriyatina qurrata a'yun...\" (Surah Furqan). Rizq, umr aur aulad sab Allah ke hukm se milte hain.\n\nNikal ki fikr na karein — Allah har zindah ka rizq likh chuka hai. Imaan aur amal-e-saleh par tawakkul karein, halal rizq talash karein.",
+      "links": [
+        {
+          "label": "Duain dekhein",
+          "path": "/dua"
+        }
+      ]
+    },
+    {
+      "keys": [
         "surah kahf",
         "kahf",
         "kehf"
       ],
       "title": "Surah Al-Kahf",
-      "answer": "Surah Al-Kahf (18wan surah) — jummah ke din parhne ki hadith me taahooshi hai. Mushaf me khol kar misst parhein.",
+      "answer": "Surah Al-Kahf (18wan surah) — jummah ke din parhne ki hadith me targheeb hai. Mushaf me khol kar misst parhein.",
       "links": [
         {
           "label": "Surah Kahf kholen",
@@ -918,8 +1180,8 @@
     }
   ],
   "fallback": {
-    "title": "Samajh gaya — aur detail chahiye?",
-    "answer": "Mujhe is sawal ka mukammal jawaab nahi mila. Aap zaroor poochh sakte hain, aur main neeche ke pages par le jaunga jo is masle me madad karenge.\n\nKoshish karein: wudu, namaz ke waqt, roza, zakat, qibla, quran page, ya \"surah yaseen\".",
+    "title": "Deeni Taleem",
+    "answer": "Main sirf Islam aur deeni masail me madad kar sakta hoon — namaz, Quran, roza, zakat, hijab, nikah, talaq, dua waghera. Aap koi deeni sawal poochhiye, main jawab dunga.\n\nKuch aise sawal poochhein:\n• \"Namaz ke faraiz kya hain?\"\n• \"Wudu kaise karein?\"\n• \"Roza ke masail batao\"\n• \"Ayatul Kursi kya hai?\"\n• \"Surah Yaseen kholo\"",
     "links": [
       {
         "label": "Namaz ke waqt",
@@ -930,8 +1192,8 @@
         "path": "/quran/read"
       },
       {
-        "label": "Community me poochhein",
-        "path": "/community"
+        "label": "Duain",
+        "path": "/dua"
       }
     ]
   },
