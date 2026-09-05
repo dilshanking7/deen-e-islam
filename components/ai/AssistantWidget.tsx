@@ -186,6 +186,12 @@ export default function AssistantWidget() {
                           </p>
                         )}
 
+                        {msg.answer && msg.answer.aiModel && (
+                          <p className="mt-2 text-[10px] font-semibold text-emerald-500">
+                            AI se jawab • {msg.answer.aiModel}
+                          </p>
+                        )}
+
                         {msg.answer && msg.answer.links.length > 0 && (
                           <div className="mt-3 flex flex-wrap gap-1.5">
                             {msg.answer.links.map((link) => (

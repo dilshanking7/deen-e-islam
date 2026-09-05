@@ -9,6 +9,7 @@ import { getAllUsers, type PublicUser } from "@/lib/firestore";
 import { useUnreadConversations } from "@/lib/use-unread";
 import { useI18n } from "@/lib/i18n";
 import { getUpcomingEvents, isEventToday, type UpcomingEvent } from "@/lib/islamic-events";
+import RequireAuth from "@/components/auth/RequireAuth";
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -44,7 +45,8 @@ export default function NotificationsPage() {
   const hasUnread = unread.length > 0;
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-green-100">
+    <RequireAuth>
+      <main className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-green-100">
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div className="absolute left-0 top-0 h-72 w-72 rounded-full bg-emerald-300/30 blur-[120px]" />
         <div className="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-purple-300/30 blur-[120px]" />
@@ -178,6 +180,7 @@ export default function NotificationsPage() {
           </div>
         </div>
       </div>
-    </main>
+      </main>
+    </RequireAuth>
   );
 }

@@ -26,6 +26,14 @@ export default function LoginForm() {
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
 
+  const redirectTarget = () => {
+    if (typeof window !== "undefined") {
+      const next = new URLSearchParams(window.location.search).get("next");
+      if (next && next.startsWith("/") && !next.startsWith("//")) return next;
+    }
+    return null;
+  };
+
   useEffect(() => {
     let active = true;
     waitForAuthUser()
@@ -82,44 +90,26 @@ export default function LoginForm() {
     setError("");
     setSuccess("");
 
+    let user: Awaited<ReturnType<typeof loginUser>> | null = null;
+
     try {
       let loginEmail = identifier.trim();
 
       // If user entered a username (not an email), resolve it to an email first
       if (!loginEmail.includes("@")) {
+        // Try username lookup, but fall back gracefully if the profile
+        // store is unreachable (offline / locked-down rules) — the auth
+        // credentials may already be a username, so let Firebase auth try.
         const normalizedUsername = loginEmail.replace(/^@/, "");
-        const profile = await findUserByUsername(normalizedUsername);
-
-        if (!profile) {
-          setError("Username not found. Check and try again.");
-          setLoading(false);
-          return;
+        try {
+          const profile = await findUserByUsername(normalizedUsername);
+          if (profile?.email) loginEmail = profile.email;
+        } catch {
+          // Keep the identifier as-is; sign-in below may still resolve it.
         }
-
-        loginEmail = profile.email;
       }
 
-      const user = await loginUser(loginEmail, password);
-
-      if (rememberMe) {
-        localStorage.setItem("remember-email", identifier);
-      } else {
-        localStorage.removeItem("remember-email");
-      }
-
-      // Fetch user profile from Firestore to verify onboarding state
-      const profile = await getUserProfile(user.uid);
-
-      setSuccess("Welcome Back 🤍");
-
-      // Dynamic redirection based on completedOnboarding flag
-      setTimeout(() => {
-        if (profile?.completedOnboarding) {
-          router.push("/home");
-        } else {
-          router.push("/welcome");
-        }
-      }, 1500);
+      user = await loginUser(loginEmail, password);
     } catch (err: unknown) {
       const errorCast = err as { code?: string; message?: string };
 
@@ -136,15 +126,68 @@ export default function LoginForm() {
         case "auth/invalid-email":
           setError("Invalid email.");
           break;
+        case "auth/invalid-login-credentials":
+          setError("Invalid email or password.");
+          break;
         default:
           setError(
             "Something went wrong. Please try again." +
               (errorCast.message ? ` (${errorCast.message})` : "")
           );
       }
-    } finally {
       setLoading(false);
+      return;
     }
+
+    // Auth succeeded. Profile read failure must NOT block login.
+    try {
+      if (rememberMe) {
+        localStorage.setItem("remember-email", identifier);
+      } else {
+        localStorage.removeItem("remember-email");
+      }
+    } catch {
+      /* ignore */
+    }
+
+    setSuccess("Welcome Back 🤍");
+    setLoading(false);
+
+    let profile: Awaited<ReturnType<typeof getUserProfile>> | null = null;
+    try {
+      profile = await getUserProfile(user.uid);
+    } catch {
+      profile = null;
+    }
+
+    let localComplete = false;
+    try {
+      localComplete = localStorage.getItem("islaam-onboarding-complete") === "1";
+    } catch {
+      /* ignore */
+    }
+
+    setTimeout(() => {
+      const next = redirectTarget();
+      if (next) {
+        router.push(next);
+        return;
+      }
+      if (profile?.completedOnboarding || localComplete) {
+        router.push("/home");
+      } else {
+        router.push("/welcome");
+      }
+    }, 1200);
+  };
+
+  const handleGuestLogin = () => {
+    try {
+      localStorage.setItem("guest-mode", "1");
+    } catch {
+      /* ignore */
+    }
+    router.push("/home");
   };
 
   const handleGoogleLogin = async () => {
@@ -337,6 +380,17 @@ export default function LoginForm() {
           <path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.2 4.3-4.1 5.7l6.2 5.2C36.7 39.8 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/>
         </svg>
         Continue with Google
+      </motion.button>
+
+      <motion.button
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        type="button"
+        onClick={handleGuestLogin}
+        disabled={loading}
+        className="w-full rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/50 py-3 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
+      >
+        👤 Explore as Guest
       </motion.button>
 
       <div className="text-center">

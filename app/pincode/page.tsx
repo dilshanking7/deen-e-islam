@@ -24,9 +24,13 @@ export default function PincodePage() {
       return;
     }
 
-    await updateUserProfile(user.uid, {
-      pincode,
-    });
+    try {
+      await updateUserProfile(user.uid, {
+        pincode,
+      });
+    } catch (saveErr) {
+      console.error("Firestore pincode save skipped:", saveErr);
+    }
 
     router.push("/profile");
   }

@@ -43,6 +43,7 @@ import {
 } from "@/lib/firestore";
 import { useI18n } from "@/lib/i18n";
 import { useUnreadConversations } from "@/lib/use-unread";
+import RequireAuth from "@/components/auth/RequireAuth";
 
 interface Post {
   id: string;
@@ -85,6 +86,27 @@ export default function CommunityPage() {
   const router = useRouter();
   const { t } = useI18n();
   const { count: unreadDmCount } = useUnreadConversations();
+
+  return (
+    <RequireAuth>
+      <CommunityContent
+        router={router}
+        t={t}
+        unreadDmCount={unreadDmCount}
+      />
+    </RequireAuth>
+  );
+}
+
+function CommunityContent({
+  router,
+  t,
+  unreadDmCount,
+}: {
+  router: ReturnType<typeof useRouter>;
+  t: (key: string, params?: Record<string, string | number>) => string;
+  unreadDmCount: number;
+}) {
 
   const [myName, setMyName] = useState("You");
   const [myUsername, setMyUsername] = useState("@you");

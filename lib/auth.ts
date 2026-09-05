@@ -76,6 +76,12 @@ export async function completeGoogleRedirect(): Promise<boolean> {
 }
 
 export async function logoutUser() {
+  try {
+    localStorage.removeItem("guest-mode");
+    localStorage.removeItem("islaam-onboarding-complete");
+  } catch {
+    /* ignore */
+  }
   await signOut(auth);
 }
 

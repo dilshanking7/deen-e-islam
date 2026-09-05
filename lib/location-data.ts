@@ -41,12 +41,87 @@ async function cachedFetch<T>(url: string, cacheKey: string): Promise<T[]> {
 
 let countriesCache: RawCountry[] | null = null;
 
+const FALLBACK_COUNTRIES: RawCountry[] = [
+  { id: 1, name: "India", iso2: "IN", emoji: "🇮🇳", phone_code: "+91" },
+  { id: 2, name: "Pakistan", iso2: "PK", emoji: "🇵🇰", phone_code: "+92" },
+  { id: 3, name: "Bangladesh", iso2: "BD", emoji: "🇧🇩", phone_code: "+880" },
+  { id: 4, name: "Saudi Arabia", iso2: "SA", emoji: "🇸🇦", phone_code: "+966" },
+  { id: 5, name: "United Arab Emirates", iso2: "AE", emoji: "🇦🇪", phone_code: "+971" },
+  { id: 6, name: "United States", iso2: "US", emoji: "🇺🇸", phone_code: "+1" },
+  { id: 7, name: "United Kingdom", iso2: "GB", emoji: "🇬🇧", phone_code: "+44" },
+  { id: 8, name: "Nepal", iso2: "NP", emoji: "🇳🇵", phone_code: "+977" },
+  { id: 9, name: "Sri Lanka", iso2: "LK", emoji: "🇱🇰", phone_code: "+94" },
+  { id: 10, name: "Afghanistan", iso2: "AF", emoji: "🇦🇫", phone_code: "+93" },
+  { id: 11, name: "Turkey", iso2: "TR", emoji: "🇹🇷", phone_code: "+90" },
+  { id: 12, name: "Qatar", iso2: "QA", emoji: "🇶🇦", phone_code: "+974" },
+  { id: 13, name: "Oman", iso2: "OM", emoji: "🇴🇲", phone_code: "+968" },
+  { id: 14, name: "Kuwait", iso2: "KW", emoji: "🇰🇼", phone_code: "+965" },
+  { id: 15, name: "Bahrain", iso2: "BH", emoji: "🇧🇭", phone_code: "+973" },
+  { id: 16, name: "Malaysia", iso2: "MY", emoji: "🇲🇾", phone_code: "+60" },
+  { id: 17, name: "Indonesia", iso2: "ID", emoji: "🇮🇩", phone_code: "+62" },
+  { id: 18, name: "Egypt", iso2: "EG", emoji: "🇪🇬", phone_code: "+20" },
+  { id: 19, name: "Iraq", iso2: "IQ", emoji: "🇮🇶", phone_code: "+964" },
+  { id: 20, name: "Iran", iso2: "IR", emoji: "🇮🇷", phone_code: "+98" },
+  { id: 21, name: "Jordan", iso2: "JO", emoji: "🇯🇴", phone_code: "+962" },
+  { id: 22, name: "Lebanon", iso2: "LB", emoji: "🇱🇧", phone_code: "+961" },
+  { id: 23, name: "Syria", iso2: "SY", emoji: "🇸🇾", phone_code: "+963" },
+  { id: 24, name: "Yemen", iso2: "YE", emoji: "🇾🇪", phone_code: "+967" },
+  { id: 25, name: "Palestine", iso2: "PS", emoji: "🇵🇸", phone_code: "+970" },
+  { id: 26, name: "Tunisia", iso2: "TN", emoji: "🇹🇳", phone_code: "+216" },
+  { id: 27, name: "Morocco", iso2: "MA", emoji: "🇲🇦", phone_code: "+212" },
+  { id: 28, name: "Algeria", iso2: "DZ", emoji: "🇩🇿", phone_code: "+213" },
+  { id: 29, name: "Libya", iso2: "LY", emoji: "🇱🇾", phone_code: "+218" },
+  { id: 30, name: "Sudan", iso2: "SD", emoji: "🇸🇩", phone_code: "+249" },
+  { id: 31, name: "Somalia", iso2: "SO", emoji: "🇸🇴", phone_code: "+252" },
+  { id: 32, name: "Nigeria", iso2: "NG", emoji: "🇳🇬", phone_code: "+234" },
+  { id: 33, name: "France", iso2: "FR", emoji: "🇫🇷", phone_code: "+33" },
+  { id: 34, name: "Germany", iso2: "DE", emoji: "🇩🇪", phone_code: "+49" },
+  { id: 35, name: "Canada", iso2: "CA", emoji: "🇨🇦", phone_code: "+1" },
+  { id: 36, name: "Australia", iso2: "AU", emoji: "🇦🇺", phone_code: "+61" },
+  { id: 37, name: "Singapore", iso2: "SG", emoji: "🇸🇬", phone_code: "+65" },
+  { id: 38, name: "Myanmar", iso2: "MM", emoji: "🇲🇲", phone_code: "+95" },
+  { id: 39, name: "Thailand", iso2: "TH", emoji: "🇹🇭", phone_code: "+66" },
+  { id: 40, name: "Philippines", iso2: "PH", emoji: "🇵🇭", phone_code: "+63" },
+  { id: 41, name: "Russia", iso2: "RU", emoji: "🇷🇺", phone_code: "+7" },
+  { id: 42, name: "China", iso2: "CN", emoji: "🇨🇳", phone_code: "+86" },
+  { id: 43, name: "Japan", iso2: "JP", emoji: "🇯🇵", phone_code: "+81" },
+  { id: 44, name: "Brazil", iso2: "BR", emoji: "🇧🇷", phone_code: "+55" },
+  { id: 45, name: "Spain", iso2: "ES", emoji: "🇪🇸", phone_code: "+34" },
+  { id: 46, name: "Italy", iso2: "IT", emoji: "🇮🇹", phone_code: "+39" },
+  { id: 47, name: "Netherlands", iso2: "NL", emoji: "🇳🇱", phone_code: "+31" },
+  { id: 48, name: "Belgium", iso2: "BE", emoji: "🇧🇪", phone_code: "+32" },
+  { id: 49, name: "Switzerland", iso2: "CH", emoji: "🇨🇭", phone_code: "+41" },
+  { id: 50, name: "Sweden", iso2: "SE", emoji: "🇸🇪", phone_code: "+46" },
+  { id: 51, name: "Norway", iso2: "NO", emoji: "🇳🇴", phone_code: "+47" },
+  { id: 52, name: "Denmark", iso2: "DK", emoji: "🇩🇰", phone_code: "+45" },
+  { id: 53, name: "Poland", iso2: "PL", emoji: "🇵🇱", phone_code: "+48" },
+  { id: 54, name: "Ukraine", iso2: "UA", emoji: "🇺🇦", phone_code: "+380" },
+  { id: 55, name: "South Africa", iso2: "ZA", emoji: "🇿🇦", phone_code: "+27" },
+  { id: 56, name: "Kenya", iso2: "KE", emoji: "🇰🇪", phone_code: "+254" },
+  { id: 57, name: "Ethiopia", iso2: "ET", emoji: "🇪🇹", phone_code: "+251" },
+  { id: 58, name: "Tanzania", iso2: "TZ", emoji: "🇹🇿", phone_code: "+255" },
+  { id: 59, name: "Uganda", iso2: "UG", emoji: "🇺🇬", phone_code: "+256" },
+  { id: 60, name: "Ghana", iso2: "GH", emoji: "🇬🇭", phone_code: "+233" },
+  { id: 61, name: "Senegal", iso2: "SN", emoji: "🇸🇳", phone_code: "+221" },
+  { id: 62, name: "Uzbekistan", iso2: "UZ", emoji: "🇺🇿", phone_code: "+998" },
+  { id: 63, name: "Kazakhstan", iso2: "KZ", emoji: "🇰🇿", phone_code: "+7" },
+  { id: 64, name: "Azerbaijan", iso2: "AZ", emoji: "🇦🇿", phone_code: "+994" },
+  { id: 65, name: "Fiji", iso2: "FJ", emoji: "🇫🇯", phone_code: "+679" },
+];
+
 export async function getCountries(force = false): Promise<RawCountry[]> {
   if (countriesCache && !force) return countriesCache;
-  const list = await cachedFetch<RawCountry>(`${BASE}/countries.json`, "loc-countries");
-  list.sort((a, b) => a.name.localeCompare(b.name));
-  countriesCache = list;
-  return list;
+  try {
+    const list = await cachedFetch<RawCountry>(`${BASE}/countries.json`, "loc-countries");
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    countriesCache = list;
+    return list;
+  } catch {
+    const list = [...FALLBACK_COUNTRIES];
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    countriesCache = list;
+    return list;
+  }
 }
 
 export async function getStates(countryIso2: string): Promise<RawState[]> {

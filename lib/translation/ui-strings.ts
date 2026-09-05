@@ -241,6 +241,8 @@ const en: Dict = {
   "prayer.windowRemaining": "… until {to}",
   "prayer.remainingShort": "{m}m left",
   "prayer.done": "done",
+  "prayer.now": "Now",
+  "prayer.activeBadge": "current time",
   "prayer.azanAlarmOn": "Azan alarm ON hai",
   "prayer.calcMethod": "Calculation Method:",
   "prayer.azanSound": "Azan / Alarm Sound",
@@ -289,6 +291,13 @@ const en: Dict = {
   "setting.theme": "Theme (Dark / Light)",
   "setting.themeDesc": "Dark aur Light mode ke beech switch karein",
   "setting.chooseLang": "Language",
+
+  "guard.loginRequired": "Login Required",
+  "guard.loginRequiredDesc":
+    "Community, chat and messages need a login. Please login or create an account to continue.",
+  "guard.login": "Login",
+  "guard.createAccount": "Create an Account",
+  "guard.continueBrowsing": "← Continue browsing as Guest",
 };
 
 const ur: Dict = {
@@ -515,6 +524,8 @@ const ur: Dict = {
   "prayer.windowRemaining": "… {to} تک",
   "prayer.remainingShort": "{m} منٹ باقی",
   "prayer.done": "ہو گئی",
+  "prayer.now": "اب",
+  "prayer.activeBadge": "موجودہ وقت",
   "prayer.azanAlarmOn": "اذان کا الرم آن ہے",
   "prayer.calcMethod": "طریقہ حساب:",
   "prayer.azanSound": "اذان / الارم آواز",
@@ -563,6 +574,12 @@ const ur: Dict = {
   "setting.theme": "تھیم (ڈارک / لائٹ)",
   "setting.themeDesc": "ڈارک اور لائٹ موڈ کے درمیان سوئچ کریں",
   "setting.chooseLang": "زبان",
+
+  "guard.loginRequired": "لاگ ان درکار ہے",
+  "guard.loginRequiredDesc": "کمیونٹی، چیٹ اور پیغامات کے لیے لاگ ان ضروری ہے۔ جاری رکھنے کے لیے لاگ ان کریں یا اکاؤنٹ بنائیں۔",
+  "guard.login": "لاگ ان",
+  "guard.createAccount": "اکاؤنٹ بنائیں",
+  "guard.continueBrowsing": "← مہمان کے طور پر جاری رکھیں",
 };
 
 const hi: Dict = {
@@ -785,6 +802,8 @@ const hi: Dict = {
   "prayer.windowRemaining": "… {to} तक",
   "prayer.remainingShort": "{m} मिनट बाकी",
   "prayer.done": "हो गई",
+  "prayer.now": "अभी",
+  "prayer.activeBadge": "वर्तमान समय",
   "prayer.azanAlarmOn": "अज़ान अलार्म चालू है",
   "prayer.calcMethod": "गणना विधि:",
   "prayer.azanSound": "अज़ान / अलार्म ध्वनि",
@@ -833,6 +852,12 @@ const hi: Dict = {
   "setting.theme": "थीम (डार्क / लाइट)",
   "setting.themeDesc": "डार्क और लाइट मोड के बीच स्विच करें",
   "setting.chooseLang": "भाषा",
+
+  "guard.loginRequired": "लॉगिन आवश्यक",
+  "guard.loginRequiredDesc": "समुदाय, चैट और संदेशों के लिए लॉगिन आवश्यक है। जारी रखने के लिए कृपया लॉगिन करें या खाता बनाएँ।",
+  "guard.login": "लॉगिन",
+  "guard.createAccount": "खाता बनाएँ",
+  "guard.continueBrowsing": "← अतिथि के रूप में जारी रखें",
 };
 
 const ar: Dict = {
@@ -1053,6 +1078,8 @@ const ar: Dict = {
   "prayer.windowRemaining": "… حتى {to}",
   "prayer.remainingShort": "متبقي {m} دقيقة",
   "prayer.done": "انتهت",
+  "prayer.now": "الآن",
+  "prayer.activeBadge": "الوقت الحالي",
   "prayer.azanAlarmOn": "منبه الأذان مفعّل",
   "prayer.calcMethod": "طريقة الحساب:",
   "prayer.azanSound": "صوت الأذان / المنبه",
@@ -1101,6 +1128,12 @@ const ar: Dict = {
   "setting.theme": "المظهر (داكن / فاتح)",
   "setting.themeDesc": "بدّل بين الوضع الداكن والفاتح",
   "setting.chooseLang": "اللغة",
+
+  "guard.loginRequired": "تسجيل الدخول مطلوب",
+  "guard.loginRequiredDesc": "المجتمع والدردشة والرسائل تتطلب تسجيل الدخول. يرجى تسجيل الدخول أو إنشاء حساب للمتابعة.",
+  "guard.login": "تسجيل الدخول",
+  "guard.createAccount": "إنشاء حساب",
+  "guard.continueBrowsing": "← متابعة التصفح كزائر",
 };
 
 export const TRANSLATIONS: Record<LanguageCode, Dict> = { en, ur, hi, ar };

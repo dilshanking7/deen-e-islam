@@ -52,6 +52,8 @@ export default function StatePage() {
     return states.filter((s) => s.toLowerCase().includes(q));
   }, [states, query]);
 
+  const manualMode = error || (states.length === 0 && !initLoading);
+
   const handleContinue = async () => {
     if (!state) {
       alert("Please select your state.");
@@ -102,8 +104,29 @@ export default function StatePage() {
           <div className="mt-3 max-h-72 overflow-y-auto rounded-2xl border border-gray-200 p-1">
             {initLoading ? (
               <p className="py-8 text-center text-sm text-gray-400">States load ho rahe hain...</p>
-            ) : error ? (
-              <p className="py-8 text-center text-sm text-red-500">{error}</p>
+            ) : manualMode ? (
+              <div className="space-y-3">
+                {error && (
+                  <p className="py-2 text-center text-sm text-red-500">{error}</p>
+                )}
+                <p className="py-1 text-center text-xs text-gray-400">
+                  Apna state/region neeche likhein:
+                </p>
+                <input
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    if (e.target.value) setState(e.target.value);
+                  }}
+                  placeholder="State/Region ka naam likhein..."
+                  className="w-full rounded-2xl border border-emerald-300 px-4 py-3 text-sm outline-none focus:border-emerald-700"
+                />
+                {state && (
+                  <p className="py-2 text-center text-sm font-semibold text-emerald-700">
+                    Selected: {state}
+                  </p>
+                )}
+              </div>
             ) : (
               filtered.map((item) => (
                 <button

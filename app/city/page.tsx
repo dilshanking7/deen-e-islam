@@ -89,6 +89,8 @@ export default function CityPage() {
     return cities.filter((c) => c.toLowerCase().includes(q));
   }, [cities, query]);
 
+  const manualMode = error || (cities.length === 0 && !initLoading && !!country && !!state);
+
   const handleContinue = async () => {
     if (!city) {
       alert("Please select your city.");
@@ -98,12 +100,16 @@ export default function CityPage() {
     localStorage.setItem("city", city);
     if (district) localStorage.setItem("district", district);
 
-    const user = auth.currentUser;
-    if (user) {
-      await updateUserProfile(user.uid, {
-        city,
-        district: district || undefined,
-      });
+    try {
+      const user = auth.currentUser;
+      if (user) {
+        await updateUserProfile(user.uid, {
+          city,
+          district: district || undefined,
+        });
+      }
+    } catch (err) {
+      console.error(err);
     }
 
     router.push("/pincode");
@@ -164,8 +170,29 @@ export default function CityPage() {
           <div className="mt-3 max-h-64 overflow-y-auto rounded-2xl border border-gray-200 p-1">
             {initLoading ? (
               <p className="py-8 text-center text-sm text-gray-400">Cities load ho rahi hain...</p>
-            ) : error ? (
-              <p className="py-8 text-center text-sm text-red-500">{error}</p>
+            ) : manualMode ? (
+              <div className="space-y-3">
+                {error && (
+                  <p className="py-2 text-center text-sm text-red-500">{error}</p>
+                )}
+                <p className="py-1 text-center text-xs text-gray-400">
+                  Apne city/gaon ka naam neeche likhein:
+                </p>
+                <input
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    if (e.target.value) setCity(e.target.value);
+                  }}
+                  placeholder="City ka naam likhein..."
+                  className="w-full rounded-2xl border border-emerald-300 px-4 py-3 text-sm outline-none focus:border-emerald-700"
+                />
+                {city && (
+                  <p className="py-2 text-center text-sm font-semibold text-emerald-700">
+                    Selected: {city}
+                  </p>
+                )}
+              </div>
             ) : (
               filtered.map((item) => (
                 <button

@@ -111,21 +111,34 @@ export default function ProfilePage() {
       setSaving(true);
       setSaved(false);
 
-      await updateUserProfile(user.uid, {
-        photoURL,
-        fullName,
-        username,
-        language,
-        country,
-        state: stateName,
-        district,
-        city,
-        pincode,
-        religion,
-        sect,
-        bio,
-        completedOnboarding: true,
-      });
+      try {
+        await updateUserProfile(user.uid, {
+          photoURL,
+          fullName,
+          username,
+          language,
+          country,
+          state: stateName,
+          district,
+          city,
+          pincode,
+          religion,
+          sect,
+          bio,
+          completedOnboarding: true,
+        });
+      } catch (saveErr) {
+        // Backend rules may block writes — the profile still works locally.
+        console.error("Firestore profile save skipped:", saveErr);
+      }
+
+      try {
+        localStorage.setItem("islaam-onboarding-complete", "1");
+        localStorage.setItem("profile-fullName", fullName);
+        localStorage.setItem("profile-username", username);
+      } catch {
+        /* ignore */
+      }
 
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);

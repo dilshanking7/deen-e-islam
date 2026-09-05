@@ -49,12 +49,12 @@ export default function PrayerPage() {
     const saved = Number(localStorage.getItem("prayer-method") || "1");
     return saved >= 1 ? saved : 1;
   });
-  const [coords, setCoords] = useState<{ lat: number; lng: number }>(() => {
-    if (typeof window === "undefined") return { lat: 20.5937, lng: 78.9629 };
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(() => {
+    if (typeof window === "undefined") return null;
     const savedLat = Number(localStorage.getItem("lat"));
     const savedLng = Number(localStorage.getItem("lng"));
     if (savedLat && savedLng) return { lat: savedLat, lng: savedLng };
-    return { lat: 20.5937, lng: 78.9629 };
+    return null;
   });
   const [locationName, setLocationName] = useState("");
   const [soundOn, setSoundOn] = useState(() => {
@@ -166,7 +166,10 @@ export default function PrayerPage() {
 
   // Auto-detect location on mount + LIVE tracking (watchPosition)
   useEffect(() => {
-    if (!("geolocation" in navigator)) return;
+    if (!("geolocation" in navigator)) {
+      tryIpFallback();
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         applyPlace(pos.coords.latitude, pos.coords.longitude);
@@ -445,7 +448,7 @@ export default function PrayerPage() {
               <p className="font-semibold text-gray-800">{locationName || savedArea || "Your Location"}</p>
               <p className="text-xs text-gray-400">
                 {data?.meta?.method?.name || CALCULATION_METHODS[method] || "Real-time"} •{" "}
-                {coords ? `${coords.lat.toFixed(2)}, ${coords.lng.toFixed(2)}` : ""}
+                {coords ? `${coords.lat.toFixed(2)}, ${coords.lng.toFixed(2)}` : "…"}
               </p>
               {savedArea && locationName !== savedArea && (
                 <p className="mt-0.5 text-[11px] font-semibold text-emerald-600">
@@ -593,10 +596,9 @@ export default function PrayerPage() {
         {/* All Prayers with alarm toggles */}
         <div className="mt-6 space-y-4">
           {timings?.map((prayer, index) => {
-            const isNext = nextPrayer && prayer.key === nextPrayer.key && !countdown.done;
-            const isPast =
-              prayer.date.getTime() < now.getTime() &&
-              !(nextPrayer && prayer.key === nextPrayer.key);
+            const isActive = currentWindow ? prayer.key === currentWindow.key : false;
+            const isNext = !isActive && nextPrayer && prayer.key === nextPrayer.key && !countdown.done;
+            const isPast = !isActive && !isNext && prayer.date.getTime() < now.getTime();
 
             return (
               <motion.div
@@ -606,23 +608,27 @@ export default function PrayerPage() {
                 transition={{ delay: 0.15 + index * 0.06 }}
                 whileHover={{ scale: 1.02 }}
                 className={`flex items-center justify-between rounded-3xl p-5 transition ${
-                  isNext
-                    ? "bg-gradient-to-r from-emerald-700 to-green-700 text-white shadow-xl"
+                  isActive
+                    ? "bg-gradient-to-r from-emerald-700 to-green-700 text-white shadow-xl ring-2 ring-yellow-300"
                     : "bg-white shadow-md ring-1 ring-emerald-50"
                 }`}
               >
                 <div className="flex items-center gap-4">
                   <span className="text-3xl">{prayer.icon}</span>
                   <div>
-                    <h3 className={`text-lg font-bold ${isNext ? "text-white" : "text-gray-800"}`}>
+                    <h3 className={`text-lg font-bold ${isActive ? "text-white" : "text-gray-800"}`}>
                       {prayer.name}
                     </h3>
-                    <p className={`text-xs ${isNext ? "text-emerald-100" : "text-gray-400"}`}>
+                    <p className={`text-xs ${isActive ? "text-emerald-100" : "text-gray-400"}`}>
                       {prayer.arabic}
-                      {isPast ? ` • ${t("prayer.done")}` : ""}
+                      {isActive
+                        ? ` • ${t("prayer.activeBadge")}`
+                        : isPast
+                        ? ` • ${t("prayer.done")}`
+                        : ""}
                     </p>
                     {rangeFor(prayer.key) && (
-                      <p className={`mt-0.5 text-xs font-semibold ${isNext ? "text-yellow-200" : "text-emerald-700"}`}>
+                      <p className={`mt-0.5 text-xs font-semibold ${isActive ? "text-yellow-200" : "text-emerald-700"}`}>
                         {t("prayer.rangeTo", {
                           from: rangeFor(prayer.key)!.startLabel,
                           to: rangeFor(prayer.key)!.endLabel,
@@ -636,11 +642,16 @@ export default function PrayerPage() {
                   <div className="text-right">
                     <p
                       className={`text-xl font-extrabold ${
-                        isNext ? "text-white" : "text-emerald-700"
+                        isActive ? "text-white" : "text-emerald-700"
                       }`}
                     >
                       {prayer.time}
                     </p>
+                    {isActive && (
+                      <span className="mt-1 inline-block rounded-full bg-white/20 px-3 py-0.5 text-xs font-semibold">
+                        {t("prayer.now")}
+                      </span>
+                    )}
                     {isNext && (
                       <span className="mt-1 inline-block rounded-full bg-white/20 px-3 py-0.5 text-xs font-semibold">
                         Next
@@ -652,7 +663,7 @@ export default function PrayerPage() {
                     onClick={() => toggleAlarm(prayer.key)}
                     title={`${prayer.name} alarm ${alarms[prayer.key] ? "band karein" : "chalu karein"}`}
                     className={`flex h-10 w-10 items-center justify-center rounded-2xl transition ${
-                      isNext ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-700"
+                      isActive ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-700"
                     }`}
                   >
                     {alarms[prayer.key] ? (

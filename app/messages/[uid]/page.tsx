@@ -21,6 +21,7 @@ import { auth } from "@/lib/firebase";
 import { db } from "@/lib/firebase";
 import { getUserProfile, getConversationId, type PublicUser } from "@/lib/firestore";
 import { useI18n } from "@/lib/i18n";
+import RequireAuth from "@/components/auth/RequireAuth";
 
 interface ChatMessage {
   id: string;
@@ -162,7 +163,8 @@ export default function ConversationPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-green-100">
+    <RequireAuth>
+      <main className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-green-100">
       <div className="sticky top-0 z-30 border-b border-white/40 bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-2xl items-center gap-3 px-5 py-3">
           <button
@@ -272,5 +274,6 @@ export default function ConversationPage() {
         )}
       </AnimatePresence>
     </main>
+    </RequireAuth>
   );
 }

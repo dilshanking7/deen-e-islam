@@ -37,16 +37,32 @@ export default function SplashScreen() {
       .then(async (user) => {
         if (detach) return;
         if (!user) {
-          // Still let the greeting breathe before login screen
+          // Guests (guest-mode flag) skip the login screen and go straight home
+          const guestFlag = (() => {
+            try {
+              return localStorage.getItem("guest-mode") === "1";
+            } catch {
+              return false;
+            }
+          })();
+          // Still let the greeting breathe before routing
           timers.push(setTimeout(() => setReady(true), 400));
-          timers.push(setTimeout(() => go("/login"), 1400));
+          timers.push(setTimeout(() => go(guestFlag ? "/home" : "/login"), 1400));
           return;
         }
         const profile = await getUserProfile(user.uid).catch(() => null);
         if (detach) return;
         setName(user.displayName || profile?.fullName || "");
         setReady(true);
-        const path = profile?.completedOnboarding ? "/community" : "/welcome";
+        const localComplete = (() => {
+          try {
+            return localStorage.getItem("islaam-onboarding-complete") === "1";
+          } catch {
+            return false;
+          }
+        })();
+        const complete = profile?.completedOnboarding || localComplete;
+        const path = complete ? "/community" : "/welcome";
         timers.push(setTimeout(() => go(path), 1400));
       })
       .catch(() => {

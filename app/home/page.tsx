@@ -108,9 +108,14 @@ export default function HomePage() {
     if (!savedLat || !savedLng) return;
 
     try {
-      const day = await getPrayerTimings({ latitude: savedLat, longitude: savedLng, method: 1 });
+      const savedMethod = Number(localStorage.getItem("prayer-method") || "1");
+      const day = await getPrayerTimings({
+        latitude: savedLat,
+        longitude: savedLng,
+        method: savedMethod >= 1 ? savedMethod : 1,
+      });
       const now = new Date();
-      const timings = PRAYER_ORDER.map((p) => ({
+      const timings = PRAYER_ORDER.filter((p) => p.key !== "Sunrise").map((p) => ({
         ...p,
         date: prayerTimeInLocal((day.timings as PrayerTimings)[p.key] || "", day.meta.timezone),
       }));
@@ -181,7 +186,16 @@ export default function HomePage() {
       const user = auth.currentUser || (await waitForAuthUser());
 
       if (!user) {
-        router.push("/login");
+        // Guest mode: allow browsing home without an account
+        setLoading(false);
+        try {
+          const savedPage = await getMushafProgress();
+          if (savedPage) {
+            const s = getSurahByPage(savedPage);
+            setLastRead({ page: savedPage, surah: `${s.number}. ${s.englishName}` });
+          }
+        } catch {}
+        await loadPrayerTimings();
         return;
       }
 

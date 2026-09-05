@@ -71,6 +71,20 @@ export default function PdfViewer() {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [showGrid, setShowGrid] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [fitWidth, setFitWidth] = useState(600);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const update = () => {
+      const avail = Math.max(280, el.clientWidth - 32);
+      setFitWidth(avail);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const lastPageKey = `pdf-last-${id}`;
 
@@ -95,8 +109,13 @@ export default function PdfViewer() {
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
     canvas.width = src.width;
     canvas.height = src.height;
-    canvas.style.width = `${Math.floor(src.width / dpr)}px`;
-    canvas.style.height = `${Math.floor(src.height / dpr)}px`;
+    const renderW = src.width / dpr;
+    const renderH = src.height / dpr;
+    const displayW = Math.max(240, fitWidth * zoom);
+    const displayH = displayW * (renderH / renderW);
+    canvas.style.width = `${displayW}px`;
+    canvas.style.height = `${displayH}px`;
+    canvas.style.maxWidth = "100%";
     if (canvas.getContext) {
       canvas.getContext("2d")!.clearRect(0, 0, canvas.width, canvas.height);
       canvas.getContext("2d")!.drawImage(src, 0, 0);
@@ -183,7 +202,7 @@ export default function PdfViewer() {
     return () => {
       cancelled = true;
     };
-  }, [page, zoom, numPages]);
+  }, [page, zoom, numPages, fitWidth]);
 
   // URL sync (replace, so back exits directly)
   useEffect(() => {

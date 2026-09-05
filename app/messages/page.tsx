@@ -8,6 +8,7 @@ import { auth } from "@/lib/firebase";
 import { getAllUsers, type PublicUser } from "@/lib/firestore";
 import { useUnreadConversations } from "@/lib/use-unread";
 import { useI18n } from "@/lib/i18n";
+import RequireAuth from "@/components/auth/RequireAuth";
 
 export default function MessagesPage() {
   const router = useRouter();
@@ -18,6 +19,57 @@ export default function MessagesPage() {
   const [showNew, setShowNew] = useState(false);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+
+  return (
+    <RequireAuth>
+      <MessagesContent
+        conversations={conversations}
+        users={users}
+        setUsers={setUsers}
+        showNew={showNew}
+        setShowNew={setShowNew}
+        search={search}
+        setSearch={setSearch}
+        loading={loading}
+        setLoading={setLoading}
+        myUid={myUid}
+        setMyUid={setMyUid}
+        router={router}
+        t={t}
+      />
+    </RequireAuth>
+  );
+}
+
+function MessagesContent({
+  conversations,
+  users,
+  setUsers,
+  showNew,
+  setShowNew,
+  search,
+  setSearch,
+  loading,
+  setLoading,
+  myUid,
+  setMyUid,
+  router,
+  t,
+}: {
+  conversations: ReturnType<typeof useUnreadConversations>["conversations"];
+  users: PublicUser[];
+  setUsers: (u: PublicUser[]) => void;
+  showNew: boolean;
+  setShowNew: (b: boolean) => void;
+  search: string;
+  setSearch: (s: string) => void;
+  loading: boolean;
+  setLoading: (b: boolean) => void;
+  myUid: string;
+  setMyUid: (u: string) => void;
+  router: ReturnType<typeof useRouter>;
+  t: (key: string, params?: Record<string, string | number>) => string;
+}) {
 
   useEffect(() => {
     async function load() {

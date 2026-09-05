@@ -12,6 +12,7 @@ export interface AiAnswer {
   answer: string;
   links: AiLink[];
   web?: WebResult | null;
+  aiModel?: string;
 }
 
 interface Intent {
@@ -218,6 +219,25 @@ function applyRepeatNote(answer: AiAnswer, topic: string): AiAnswer {
   };
 }
 
+// ---------------- Free AI (Hugging Face) — kisi bhi sawal ka jawab ----------------
+export async function queryHuggingFace(
+  question: string
+): Promise<{ text: string; model: string } | null> {
+  try {
+    const res = await fetch("/api/ai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { text?: string; model?: string };
+    if (data?.text) return { text: data.text, model: data.model || "" };
+    return null;
+  } catch {
+    return null;
+  }
+}
 // ---------------- Async smart answer (Quran + web + local) --------------
 export async function getAiAnswerAsync(rawQuery: string): Promise<AiAnswer> {
   const q = normalize(rawQuery);
@@ -275,14 +295,24 @@ export async function getAiAnswerAsync(rawQuery: string): Promise<AiAnswer> {
   const matches = matchIntents(q);
   if (matches.length > 0) {
     const strong = matches[0].score >= 90;
-    const answer = buildAnswer(matches[0].intent);
-    const withNote = applyRepeatNote(answer, matches[0].intent.title);
-    // Weak (typo/fuzzy) match -> web se confirm bhi kar lein
-    if (!strong) {
-      const web = await searchWeb(rawQuery);
-      if (web) withNote.web = web;
+    if (strong) {
+      const answer = buildAnswer(matches[0].intent);
+      return applyRepeatNote(answer, matches[0].intent.title);
     }
-    return withNote;
+  }
+
+  // 3.5) Free AI (Hugging Face) - kisi bhi sawal ka jawab
+  const hf = await queryHuggingFace(rawQuery);
+  if (hf) {
+    return {
+      title: "Deeni Assistant (AI)",
+      answer: hf.text,
+      links: [
+        { label: "Namaz ke waqt", path: "/prayer" },
+        { label: "Quran", path: "/quran/read" },
+      ],
+      aiModel: hf.model,
+    };
   }
 
   // 4) Internet se kuch dhoondhein
@@ -301,6 +331,12 @@ export async function getAiAnswerAsync(rawQuery: string): Promise<AiAnswer> {
       ],
       web,
     };
+  }
+
+  // 4.5) Weak KB match ho to wahi jawab
+  if (matches.length > 0) {
+    const answer = buildAnswer(matches[0].intent);
+    return applyRepeatNote(answer, matches[0].intent.title);
   }
 
   return buildAnswer(KB.fallback);

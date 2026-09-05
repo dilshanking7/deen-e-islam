@@ -49,18 +49,23 @@ export default function RegisterForm() {
       // Register user in Firebase Auth
       const user = await registerUser(email, password);
 
-      // Save additional profile details in Firestore
-      await createUserProfile(user.uid, {
-        fullName,
-        username,
-        email,
-        language: "",
-        country: "",
-        state: "",
-        city: "",
-        pincode: "",
-        completedOnboarding: false,
-      });
+      // Save additional profile details in Firestore (best-effort: if the
+      // backend rules block writes, the account still works fine).
+      try {
+        await createUserProfile(user.uid, {
+          fullName,
+          username,
+          email,
+          language: "",
+          country: "",
+          state: "",
+          city: "",
+          pincode: "",
+          completedOnboarding: false,
+        });
+      } catch (profileErr) {
+        console.error("Profile save failed (continuing):", profileErr);
+      }
 
       setSuccess("Account Created Successfully 🎉");
 
@@ -80,8 +85,11 @@ export default function RegisterForm() {
         case "auth/weak-password":
           setError("Password is too weak.");
           break;
+        case "auth/operation-not-allowed":
+          setError("Email/password sign-up is currently disabled. Please try Google login.");
+          break;
         default:
-          setError(errorCast.message || "Something went wrong. Please try again.");
+          setError(getFriendlyError(errorCast) || "Something went wrong. Please try again.");
       }
     } finally {
       setLoading(false);
@@ -176,7 +184,7 @@ export default function RegisterForm() {
         className="w-full rounded-2xl bg-emerald-700 py-4 font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {loading ? "Creating Account..." : "Create Account"}
-      </motion.button>
+</motion.button>
 
       <button
         type="button"
@@ -187,4 +195,12 @@ export default function RegisterForm() {
       </button>
     </motion.form>
   );
+}
+
+function getFriendlyError(err: { code?: string; message?: string }): string | null {
+  const msg = err?.message || "";
+  if (/Missing or insufficient permissions|permission-denied/.test(msg)) {
+    return null; // handled by the default message
+  }
+  return err?.message || null;
 }

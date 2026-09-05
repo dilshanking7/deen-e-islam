@@ -64,6 +64,8 @@ function readCachedPrayerDay(latitude: number, longitude: number, method: number
       | (PrayerDay & { cachedAt?: number; cachedMethod?: number })
       | null;
     if (!cached) return null;
+    const stale = !cached.cachedAt || new Date(cached.cachedAt).toDateString() !== new Date().toDateString();
+    if (stale) return null;
     const sameMethod = cached.cachedMethod === method;
     const nearLocation =
       Math.abs((cached.meta?.latitude || 0) - latitude) < 0.75 &&

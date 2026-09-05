@@ -90,6 +90,7 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
     >
       {children}
       <div
+        suppressHydrationWarning
         className="pointer-events-none fixed inset-0 z-[100]"
         style={{
           opacity:
