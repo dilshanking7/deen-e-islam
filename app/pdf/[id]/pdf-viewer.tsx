@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { useSwipeable } from "react-swipeable";
 import {
   ChevronLeft,
   ChevronRight,
@@ -14,16 +13,16 @@ import {
   RotateCcw,
   X,
   BookOpen,
+  LayoutGrid,
+  BookmarkCheck,
+  RotateCw,
 } from "lucide-react";
 
 import * as pdfjsLib from "pdfjs-dist";
 
 import { PDF_FILES } from "@/lib/pdfs-data";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url
-).toString();
+pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
 interface PdfEntry {
   id: string;
@@ -42,37 +41,85 @@ export default function PdfViewer() {
   );
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const docRef = useRef<{ numPages: number; getPage: (n: number) => Promise<{ render: (p: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => Promise<void>; getViewport: (s: { scale: number }) => { width: number; height: number } }> } | null>(null);
+  const docRef = useRef<{
+    numPages: number;
+    getPage: (
+      n: number
+    ) => Promise<{
+      getViewport: (s: { scale: number }) => {
+        width: number;
+        height: number;
+      };
+      render: (p: {
+        canvasContext: CanvasRenderingContext2D;
+        viewport: { width: number; height: number };
+      }) => { promise: Promise<void>; cancel: () => void };
+    }>;
+  } | null>(null);
   const renderTaskRef = useRef<{ cancel: () => void } | null>(null);
+  const pageCacheRef = useRef<Map<number, HTMLCanvasElement>>(new Map());
+  const prefetchRunRef = useRef(false);
 
   const [numPages, setNumPages] = useState(0);
   const [page, setPage] = useState(1);
   const [pageInput, setPageInput] = useState("");
   const [zoom, setZoom] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
-  const [showSideArrows, setShowSideArrows] = useState(false);
+  const [showGrid, setShowGrid] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
 
   const lastPageKey = `pdf-last-${id}`;
 
-  // Open PDF
+  async function buildPageCanvas(n: number, scale: number) {
+    if (!docRef.current) return null;
+    const pdfPage = await docRef.current.getPage(n);
+    const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+    const viewport = pdfPage.getViewport({ scale: scale * dpr });
+    const c = document.createElement("canvas");
+    c.width = Math.floor(viewport.width);
+    c.height = Math.floor(viewport.height);
+    await pdfPage.render({
+      canvasContext: c.getContext("2d")!,
+      viewport,
+    }).promise;
+    return c;
+  }
+
+  function drawCanvas(src: HTMLCanvasElement) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+    canvas.width = src.width;
+    canvas.height = src.height;
+    canvas.style.width = `${Math.floor(src.width / dpr)}px`;
+    canvas.style.height = `${Math.floor(src.height / dpr)}px`;
+    if (canvas.getContext) {
+      canvas.getContext("2d")!.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.getContext("2d")!.drawImage(src, 0, 0);
+    }
+  }
+
+  // Open PDF (restore last-read page)
   const openPdf = useCallback(async () => {
     if (!entry) return;
     setLoading(true);
     setError("");
     try {
-      const task = pdfjsLib.getDocument(entry.file);
+      const task = pdfjsLib.getDocument({ url: entry.file });
       const doc = await task.promise;
       docRef.current = doc as unknown as typeof docRef.current;
       setNumPages(doc.numPages);
+      pageCacheRef.current.clear();
       const saved = parseInt(localStorage.getItem(lastPageKey) || "1", 10);
       const startPage = saved >= 1 && saved <= doc.numPages ? saved : 1;
       setPage(startPage);
     } catch {
       setError(
-        "PDF load nahi ho paya. Check karein ke file public/pdfs me mojood hai."
+        "Book load nahi ho paya. Check karein ke file public/pdfs me mojood hai."
       );
     } finally {
       setLoading(false);
@@ -80,52 +127,63 @@ export default function PdfViewer() {
   }, [entry, lastPageKey]);
 
   useEffect(() => {
-    openPdf();
+    const t = setTimeout(() => {
+      openPdf();
+    }, 0);
+    const task = renderTaskRef.current;
     return () => {
-      renderTaskRef.current?.cancel();
+      clearTimeout(t);
+      task?.cancel();
     };
   }, [openPdf]);
 
-  // Render page on canvas
+  // Render current page onto the canvas (from cache when possible) + prefetch neighbours
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !docRef.current || page < 1) return;
     let cancelled = false;
 
     (async () => {
-      try {
-        const pdfPage = await docRef.current!.getPage(page);
-        const viewport = pdfPage.getViewport({ scale: zoom });
+      const doc = docRef.current!;
+      if (numPages <= 0) setNumPages(doc.numPages);
 
-        const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
-        canvas.width = Math.floor(viewport.width * dpr);
-        canvas.height = Math.floor(viewport.height * dpr);
-        canvas.style.width = `${viewport.width}px`;
-        canvas.style.height = `${viewport.height}px`;
-
-        renderTaskRef.current?.cancel();
-        const task = pdfPage.render({
-          canvasContext: canvas.getContext("2d")!,
-          viewport: {
-            width: viewport.width * dpr,
-            height: viewport.height * dpr,
-          } as unknown as { width: number; height: number },
-        });
-        renderTaskRef.current = task as unknown as { cancel: () => void };
-        await task.promise;
-        if (!cancelled) setLoading(false);
-      } catch (e) {
-        if ((e as Error)?.name !== "RenderingCancelledException" && !cancelled) {
-          setError("Page render nahi ho paya.");
+      let src: HTMLCanvasElement | null = pageCacheRef.current.get(page) ?? null;
+      if (!src) {
+        try {
+          src = await buildPageCanvas(page, zoom);
+          if (src) pageCacheRef.current.set(page, src);
+        } catch {
+          if (!cancelled) setError("Page render nahi ho paya.");
+          setLoading(false);
+          return;
         }
+      }
+      if (cancelled || !src) return;
+
+      drawCanvas(src);
+      setLoading(false);
+      setReady(true);
+
+      if (!prefetchRunRef.current) {
+        prefetchRunRef.current = true;
+        [page + 1, page + 2, page - 1, page - 2]
+          .filter((n) => n >= 1 && n <= doc.numPages && !pageCacheRef.current.has(n))
+          .forEach((n) => {
+            buildPageCanvas(n, zoom)
+              .then((c) => {
+                if (c && !cancelled) {
+                  if (!pageCacheRef.current.has(n)) pageCacheRef.current.set(n, c);
+                }
+              })
+              .catch(() => {});
+          });
       }
     })();
 
     return () => {
       cancelled = true;
-      renderTaskRef.current?.cancel();
     };
-  }, [page, zoom, loading]);
+  }, [page, zoom, numPages]);
 
   // URL sync (replace, so back exits directly)
   useEffect(() => {
@@ -136,30 +194,34 @@ export default function PdfViewer() {
 
   // Restore page from URL on mount
   useEffect(() => {
+    if (typeof window === "undefined") return;
     const qp = new URLSearchParams(window.location.search).get("p");
     if (qp) {
       const n = parseInt(qp, 10);
-      if (n >= 1 && n <= (docRef.current?.numPages ?? n)) setPage(n);
+      const max = docRef.current?.numPages ?? n;
+      if (n >= 1 && n <= max) setPage(n);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    setShowSideArrows(
-      typeof window !== "undefined" &&
-        window.matchMedia("(min-width: 768px)").matches
-    );
-  }, []);
-
-  useEffect(() => {
-    if (page >= 1) localStorage.setItem(lastPageKey, String(page));
+    if (page >= 1 && typeof window !== "undefined") {
+      localStorage.setItem(lastPageKey, String(page));
+      const t1 = setTimeout(() => setIsSaved(true), 0);
+      const t2 = setTimeout(() => setIsSaved(false), 2200);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
+    }
   }, [page, lastPageKey]);
 
   function goTo(n: number) {
     if (!docRef.current) return;
     const target = Math.max(1, Math.min(n, docRef.current.numPages));
-    setPage(target);
+    if (!pageCacheRef.current.has(target)) setLoading(true);
+    pageCacheRef.current.delete(target - 1);
     setPageInput(String(target));
+    setPage(target);
     window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
   }
 
@@ -180,10 +242,8 @@ export default function PdfViewer() {
     if (!wrapRef.current) return;
     if (!document.fullscreenElement) {
       wrapRef.current.requestFullscreen?.();
-      setIsFullscreen(true);
     } else {
       document.exitFullscreen?.();
-      setIsFullscreen(false);
     }
   }
 
@@ -195,7 +255,6 @@ export default function PdfViewer() {
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
 
-  // Keyboard: left/right arrows
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "ArrowRight") nextPage();
@@ -205,19 +264,33 @@ export default function PdfViewer() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  const swipeHandlers = useSwipeable({
-    onSwipedLeft: () => nextPage(),
-    onSwipedRight: () => prevPage(),
-    preventScrollOnSwipe: false,
-    trackMouse: true,
-  });
+  const touchXRef = useRef<number | null>(null);
+  const touchYRef = useRef<number | null>(null);
+
+  function handleTouchStart(e: React.TouchEvent) {
+    touchXRef.current = e.touches[0].clientX;
+    touchYRef.current = e.touches[0].clientY;
+  }
+  function handleTouchEnd(e: React.TouchEvent) {
+    const x0 = touchXRef.current;
+    const y0 = touchYRef.current;
+    touchXRef.current = null;
+    touchYRef.current = null;
+    if (x0 === null || y0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    const dy = e.changedTouches[0].clientY - y0;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx < 0) nextPage();
+      else prevPage();
+    }
+  }
 
   if (!entry) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-gray-100">
+      <main className="flex min-h-screen items-center justify-center bg-[#f5f3ee]">
         <div className="max-w-sm rounded-3xl bg-white p-8 text-center shadow-xl">
-          <BookOpen className="mx-auto text-gray-300" size={48} />
-          <h2 className="mt-4 text-lg font-bold text-gray-800">PDF not found</h2>
+          <BookOpen className="mx-auto text-amber-400" size={48} />
+          <h2 className="mt-4 text-lg font-bold text-gray-800">Book not found</h2>
           <p className="mt-1 text-sm text-gray-500">
             Yeh book app me registered nahi hai.
           </p>
@@ -232,31 +305,38 @@ export default function PdfViewer() {
     );
   }
 
+  const pageSaved = isSaved && numPages > 0;
+
   return (
     <div className="flex min-h-screen flex-col bg-[#f5f3ee]">
       {/* Top bar */}
-      <header className="sticky top-0 z-30 border-b border-emerald-100 bg-white/90 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-amber-100 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-3">
           <button
             onClick={() => router.push("/books")}
-            className="rounded-full bg-emerald-100 p-2 text-emerald-800 transition hover:bg-emerald-200"
+            className="rounded-full bg-amber-100 p-2 text-amber-900 transition hover:bg-amber-200"
             aria-label="Back to books"
           >
             <ChevronLeft size={20} />
           </button>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-sm font-bold text-gray-800">{entry.title}</h1>
-            <p className="text-xs text-gray-400">
+            <p className="flex items-center gap-1.5 text-xs text-gray-400">
               {loading ? "Loading…" : `Page ${page} / ${numPages}`}
+              {ready && pageSaved && (
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                  <BookmarkCheck size={11} /> saved
+                </span>
+              )}
             </p>
           </div>
 
-          <form onSubmit={onJumpSubmit} className="flex items-center gap-1.5">
+          <form onSubmit={onJumpSubmit} className="hidden items-center gap-1.5 sm:flex">
             <input
               value={pageInput}
               onChange={(e) => setPageInput(e.target.value.replace(/\D/g, ""))}
               placeholder={String(page)}
-              className="w-14 rounded-xl border border-emerald-200 px-2 py-1.5 text-center text-sm font-semibold text-gray-700 outline-none focus:border-emerald-500"
+              className="w-14 rounded-xl border border-amber-200 px-2 py-1.5 text-center text-sm font-semibold text-gray-700 outline-none focus:border-amber-500"
             />
             <span className="text-sm text-gray-400">/ {numPages || "—"}</span>
             <button
@@ -267,24 +347,40 @@ export default function PdfViewer() {
             </button>
           </form>
 
-          {/* Zoom + Fullscreen */}
+          <button
+            onClick={() => setShowGrid(true)}
+            className="flex items-center gap-1 rounded-xl bg-gray-100 px-3 py-2 text-xs font-bold text-gray-700 transition hover:bg-amber-100"
+            aria-label="Page grid"
+          >
+            <LayoutGrid size={15} />
+            <span className="hidden sm:inline">Pages</span>
+          </button>
+
           <div className="flex items-center gap-1">
             <button
-              onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))}
+              onClick={() => {
+                setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)));
+              }}
               className="rounded-full bg-gray-100 p-2 text-gray-600 hover:bg-gray-200"
               aria-label="Zoom out"
             >
               <ZoomOut size={16} />
             </button>
             <button
-              onClick={() => setZoom((z) => Math.min(3, +(z + 0.25).toFixed(2)))}
+              onClick={() => {
+                pageCacheRef.current.clear();
+                setZoom((z) => Math.min(3, +(z + 0.25).toFixed(2)));
+              }}
               className="rounded-full bg-gray-100 p-2 text-gray-600 hover:bg-gray-200"
               aria-label="Zoom in"
             >
               <ZoomIn size={16} />
             </button>
             <button
-              onClick={() => setZoom(1)}
+              onClick={() => {
+                pageCacheRef.current.clear();
+                setZoom(1);
+              }}
               className="rounded-full bg-gray-100 p-2 text-gray-600 hover:bg-gray-200"
               aria-label="Reset zoom"
             >
@@ -304,66 +400,85 @@ export default function PdfViewer() {
       {/* Reader */}
       <div
         ref={wrapRef}
-        {...swipeHandlers}
-        className="relative flex flex-1 flex-col items-center justify-center overflow-auto px-4 py-6"
-        onTouchMove={() => {}}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        className="relative flex flex-1 flex-col items-center justify-center overflow-auto px-4 py-6 [touch-action:pan-y]"
       >
-        {/* Side arrows (desktop) */}
-        {showSideArrows && (
+        {numPages > 1 && (
           <>
             <button
               onClick={prevPage}
               disabled={page <= 1}
-              className="fixed left-4 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white p-3 shadow-xl ring-1 ring-emerald-100 transition hover:bg-emerald-50 disabled:opacity-30"
+              className="fixed left-3 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white p-3 shadow-xl ring-1 ring-amber-100 transition hover:bg-amber-50 disabled:opacity-30 sm:left-4"
               aria-label="Previous page"
             >
-              <ChevronLeft size={24} className="text-emerald-800" />
+              <ChevronLeft size={24} className="text-amber-900" />
             </button>
             <button
               onClick={nextPage}
-              disabled={!numPages || page >= numPages}
-              className="fixed right-4 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white p-3 shadow-xl ring-1 ring-emerald-100 transition hover:bg-emerald-50 disabled:opacity-30"
+              disabled={page >= numPages}
+              className="fixed right-3 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white p-3 shadow-xl ring-1 ring-amber-100 transition hover:bg-amber-50 disabled:opacity-30 sm:right-4"
               aria-label="Next page"
             >
-              <ChevronRight size={24} className="text-emerald-800" />
+              <ChevronRight size={24} className="text-amber-900" />
             </button>
           </>
         )}
 
         {error ? (
-          <div className="max-w-sm rounded-3xl bg-white p-8 text-center shadow-xl">
-            <X className="mx-auto text-red-400" size={40} />
-            <h2 className="mt-4 text-lg font-bold text-gray-800">Kuch problem hui</h2>
-            <p className="mt-1 text-sm text-gray-500">{error}</p>
-            <button
-              onClick={() => router.push("/books")}
-              className="mt-5 rounded-2xl bg-emerald-700 px-6 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800"
-            >
-              ← Books
-            </button>
+          <div className="w-full max-w-sm">
+            <div className="mx-auto rounded-3xl bg-white p-6 text-center shadow-xl">
+              <X className="mx-auto text-amber-400" size={40} />
+              <h2 className="mt-3 text-lg font-bold text-gray-800">Kuch problem hui</h2>
+              <p className="mt-1 text-sm text-gray-500">{error}</p>
+              <div className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
+                <button
+                  onClick={() => openPdf()}
+                  className="inline-flex items-center gap-1.5 rounded-2xl bg-emerald-700 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800"
+                >
+                  <RotateCw size={16} /> Dobara try karein
+                </button>
+                <a
+                  href={entry.file}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-2xl bg-gray-100 px-6 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-200"
+                >
+                  Browser me kholen
+                </a>
+              </div>
+            </div>
           </div>
         ) : (
           <div className="relative">
-            {loading && (
+            {!ready && loading && (
               <div className="absolute inset-0 z-10 flex items-center justify-center">
-                <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" />
+                <div className="h-10 w-10 animate-spin rounded-full border-4 border-amber-500 border-t-transparent" />
               </div>
             )}
             <motion.div
               key={page}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.25 }}
-              className="overflow-hidden rounded-lg shadow-2xl ring-1 ring-gray-200"
+              initial={{ opacity: 0, scale: 0.995 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.22 }}
+              className="overflow-hidden rounded-xl shadow-2xl ring-1 ring-gray-200"
             >
               <canvas ref={canvasRef} className="block bg-white" />
             </motion.div>
+            <div className="mt-3 flex justify-center gap-2">
+              <button
+                onClick={() => setShowGrid(true)}
+                className="rounded-2xl bg-white px-4 py-2 text-xs font-semibold text-gray-600 shadow ring-1 ring-gray-200 transition hover:bg-amber-50"
+              >
+                🗂 Jaldi page kholein
+              </button>
+            </div>
           </div>
         )}
       </div>
 
       {/* Bottom bar */}
-      <footer className="sticky bottom-0 z-30 border-t border-emerald-100 bg-white/90 backdrop-blur">
+      <footer className="sticky bottom-0 z-30 border-t border-amber-100 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-3">
           <button
             onClick={prevPage}
@@ -373,11 +488,13 @@ export default function PdfViewer() {
             <ChevronLeft size={18} />
             <span className="hidden sm:inline">Previous</span>
           </button>
-
-          <span className="text-sm font-semibold text-gray-500">
+          <span
+            className="cursor-pointer rounded-xl px-3 py-1.5 text-sm font-semibold text-gray-500 transition hover:bg-amber-50"
+            onClick={() => setShowGrid(true)}
+            title="Page grid"
+          >
             {numPages ? `${page} / ${numPages}` : "…"}
           </span>
-
           <button
             onClick={nextPage}
             disabled={!numPages || page >= numPages}
@@ -389,16 +506,72 @@ export default function PdfViewer() {
         </div>
       </footer>
 
-      {/* Loading overlay when switching pages */}
+      {/* Page grid jump */}
       <AnimatePresence>
-        {loading && (
+        {showGrid && numPages > 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-white/40 backdrop-blur-sm"
+            className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center sm:p-5"
+            onClick={() => setShowGrid(false)}
           >
-            <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" />
+            <motion.div
+              onClick={(e) => e.stopPropagation()}
+              initial={{ y: 50, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 50, opacity: 0 }}
+              transition={{ type: "spring", damping: 26 }}
+              className="flex max-h-[75vh] w-full max-w-lg flex-col rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl"
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-gray-800">
+                  {entry.title}
+                  <span className="ml-2 text-sm font-medium text-gray-400">
+                    {numPages} pages
+                  </span>
+                </h2>
+                <button
+                  onClick={() => setShowGrid(false)}
+                  className="rounded-full bg-gray-100 p-2 text-gray-500 hover:bg-gray-200"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-5 gap-2 overflow-y-auto pr-1 sm:grid-cols-8">
+                {Array.from({ length: numPages }, (_, i) => i + 1).map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => {
+                      goTo(n);
+                      setShowGrid(false);
+                    }}
+                    className={`rounded-xl py-3 text-sm font-bold transition ${
+                      n === page
+                        ? "bg-emerald-700 text-white shadow-lg"
+                        : "bg-gray-50 text-gray-600 hover:bg-amber-50"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Loading overlay when switching pages */}
+      <AnimatePresence>
+        {!ready && loading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-[#f5f3ee]/70 backdrop-blur-sm"
+          >
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-amber-500 border-t-transparent" />
           </motion.div>
         )}
       </AnimatePresence>

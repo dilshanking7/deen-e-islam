@@ -30,7 +30,7 @@ export default function WelcomePage() {
 
     const timer = setTimeout(() => {
       router.push("/language");
-    }, 3500);
+    }, 2200);
 
     return () => clearTimeout(timer);
   }, [router]);

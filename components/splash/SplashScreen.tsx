@@ -1,222 +1,139 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 
 import Aurora from "./Aurora";
 import Stars from "./Stars";
-import Bismillah from "./Bismillah";
 import { waitForAuthUser } from "@/lib/auth-state";
 import { getUserProfile } from "@/lib/firestore";
-
-const VERSES = [
-  {
-    arabic: "إِنَّ مَعَ الْعُسْرِ يُسْرًا",
-    translation: "Indeed, with hardship comes ease.",
-    ref: "Ash-Sharh 94:6",
-  },
-  {
-    arabic: "وَقُل رَّبِّ زِدْنِي عِلْمًا",
-    translation: "My Lord, increase me in knowledge.",
-    ref: "Ta-Ha 20:114",
-  },
-  {
-    arabic: "وَلَا تَهِنُوا وَلَا تَحْزَنُوا وَأَنتُمُ الْأَعْلَوْنَ إِن كُنتُم مُّؤْمِنِينَ",
-    translation: "Do not lose heart, nor grieve — you will prevail if you are believers.",
-    ref: "Aal-Imran 3:139",
-  },
-  {
-    arabic: "أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ",
-    translation: "Surely in the remembrance of Allah do hearts find rest.",
-    ref: "Ar-Ra'd 13:28",
-  },
-];
 
 export default function SplashScreen() {
   const router = useRouter();
 
-  const [phase, setPhase] = useState<"logo" | "bismillah" | "title" | "verse">("logo");
+  const [greeting, setGreeting] = useState("Assalamu Alaikum");
+  const [name, setName] = useState("");
+  const [ready, setReady] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [verseIndex, setVerseIndex] = useState(0);
+  const navigatedRef = useRef(false);
+
+  // greetingSetter ko salaam — greeting ab welcome page use karta hai
+  void setGreeting;
 
   useEffect(() => {
-    let targetPath = "/login";
+    let detach = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    const go = (path: string) => {
+      if (navigatedRef.current || detach) return;
+      navigatedRef.current = true;
+      setFadeOut(true);
+      timers.push(setTimeout(() => router.push(path), 450));
+    };
 
     waitForAuthUser()
       .then(async (user) => {
-        if (!user) return;
-        const profile = await getUserProfile(user.uid);
-        targetPath = profile?.completedOnboarding ? "/home" : "/welcome";
+        if (detach) return;
+        if (!user) {
+          // Still let the greeting breathe before login screen
+          timers.push(setTimeout(() => setReady(true), 400));
+          timers.push(setTimeout(() => go("/login"), 1400));
+          return;
+        }
+        const profile = await getUserProfile(user.uid).catch(() => null);
+        if (detach) return;
+        setName(user.displayName || profile?.fullName || "");
+        setReady(true);
+        const path = profile?.completedOnboarding ? "/community" : "/welcome";
+        timers.push(setTimeout(() => go(path), 1400));
       })
       .catch(() => {
-        targetPath = "/login";
+        if (detach) return;
+        timers.push(setTimeout(() => setReady(true), 400));
+        timers.push(setTimeout(() => go("/login"), 1400));
       });
 
-    const t1 = setTimeout(() => setPhase("bismillah"), 1100);
-    const t2 = setTimeout(() => setPhase("title"), 2100);
-    const t3 = setTimeout(() => setPhase("verse"), 3100);
-    const t4 = setTimeout(() => setFadeOut(true), 5600);
-    const t5 = setTimeout(() => router.push(targetPath), 6200);
-
-    const progressTimer = setInterval(() => {
-      setProgress((prev) => Math.min(100, prev + 1.4));
-    }, 90);
-
-    const verseTimer = setInterval(() => {
-      setVerseIndex((prev) => (prev + 1) % VERSES.length);
-    }, 1200);
+    // Hard fail-safe: never trap the user on the splash
+    timers.push(setTimeout(() => go("/home"), 3500));
 
     return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(t4);
-      clearTimeout(t5);
-      clearInterval(progressTimer);
-      clearInterval(verseTimer);
+      detach = true;
+      timers.forEach(clearTimeout);
     };
   }, [router]);
-
-  const verse = VERSES[verseIndex];
 
   return (
     <AnimatePresence>
       {!fadeOut && (
         <motion.div
           initial={{ opacity: 1 }}
-          exit={{ opacity: 0, scale: 1.06 }}
-          transition={{ duration: 0.8 }}
-          className="fixed inset-0 flex items-center justify-center overflow-hidden bg-gradient-to-br from-emerald-900 via-emerald-950 to-black z-[999]"
+          exit={{ opacity: 0, scale: 1.04 }}
+          transition={{ duration: 0.4 }}
+          className="fixed inset-0 z-[999] flex items-center justify-center overflow-hidden bg-gradient-to-br from-emerald-900 via-emerald-950 to-black"
         >
           <Aurora />
           <Stars />
 
-          {/* Moon glow */}
-          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56">
-            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-yellow-100 to-yellow-400 opacity-90 shadow-[0_0_80px_30px_rgba(253,224,71,0.35)]" />
-            <div className="absolute right-4 top-6 h-48 w-48 rounded-full bg-emerald-950/80" />
-          </div>
-
-          <div className="relative flex flex-col items-center px-6">
-            {/* Logo */}
+          <div className="relative flex flex-col items-center px-8 text-center">
             <motion.div
-              initial={{ scale: 0.2, opacity: 0, rotate: -20 }}
-              animate={{ scale: 1, opacity: 1, rotate: 0 }}
-              transition={{ duration: 1.1, ease: [0.34, 1.56, 0.64, 1] }}
+              initial={{ scale: 0.3, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
               className="relative"
             >
               <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 12, ease: "linear" }}
-                className="absolute inset-0 m-auto h-32 w-32 rounded-full border-2 border-dashed border-emerald-400/60"
+                animate={{ scale: [1, 1.12, 1], opacity: [0.35, 0.6, 0.35] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+                className="absolute inset-0 m-auto h-24 w-24 rounded-full bg-emerald-400/40 blur-2xl"
               />
-              <motion.div
-                animate={{ scale: [1, 1.2, 1], opacity: [0.4, 0.7, 0.4] }}
-                transition={{ repeat: Infinity, duration: 2.6 }}
-                className="absolute inset-0 m-auto h-32 w-32 rounded-full bg-emerald-400/40 blur-2xl"
-              />
-              <motion.div
-                animate={{ scale: [1, 1.06, 1] }}
-                transition={{ repeat: Infinity, duration: 2.2 }}
-                className="relative z-10 overflow-hidden rounded-full shadow-2xl ring-4 ring-emerald-400/50"
-              >
+              <div className="relative z-10 overflow-hidden rounded-full shadow-2xl ring-2 ring-emerald-400/50">
                 <Image
                   src="/logo.png"
                   alt="Islaam-E-Deen Logo"
-                  width={120}
-                  height={120}
-                  className="h-[120px] w-[120px] object-contain"
+                  width={96}
+                  height={96}
+                  className="h-24 w-24 object-contain"
                   priority
                 />
-              </motion.div>
+              </div>
             </motion.div>
 
-            {/* Bismillah */}
             <AnimatePresence>
-              {phase !== "logo" && (
+              {ready && (
                 <motion.div
-                  initial={{ opacity: 0, y: 30 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8 }}
-                  className="mt-6"
-                >
-                  <Bismillah />
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Title */}
-            <AnimatePresence>
-              {phase === "title" || phase === "verse" ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 40, filter: "blur(8px)" }}
+                  initial={{ opacity: 0, y: 18, filter: "blur(6px)" }}
                   animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                  transition={{ duration: 0.9 }}
-                  className="mt-2 text-center"
+                  transition={{ duration: 0.45 }}
+                  className="mt-8"
                 >
-                  <h1 className="text-4xl font-extrabold tracking-tight text-emerald-50 sm:text-5xl">
-                    Islaam
-                    <span className="text-emerald-400">-</span>
-                    E
-                    <span className="text-emerald-400">-</span>
-                    Deen
+                  <h1 className="text-3xl font-extrabold tracking-tight text-emerald-50">
+                    {greeting}!{name ? (
+                      <span className="mt-1 block bg-gradient-to-r from-emerald-300 to-green-400 bg-clip-text text-transparent">
+                        {name}
+                      </span>
+                    ) : (
+                      <span className="mt-1 block text-2xl font-semibold text-emerald-200/90">
+                        Welcome to Islaam-E-Deen
+                      </span>
+                    )}
                   </h1>
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.4 }}
-                    className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm font-semibold tracking-wide text-emerald-200/90"
-                  >
-                    <span>Learn</span>
-                    <span className="text-emerald-500">•</span>
-                    <span>Practice</span>
-                    <span className="text-emerald-500">•</span>
-                    <span>Share Islam</span>
-                  </motion.div>
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
-
-            {/* Rotating Verse */}
-            <AnimatePresence mode="wait">
-              {phase === "verse" && (
-                <motion.div
-                  key={verseIndex}
-                  initial={{ opacity: 0, y: 30 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -30 }}
-                  transition={{ duration: 0.6 }}
-                  className="mt-12 max-w-md text-center"
-                >
-                  <p className="text-3xl font-semibold leading-[1.9] text-emerald-100" dir="rtl">
-                    {verse.arabic}
-                  </p>
-                  <p className="mt-4 text-base text-emerald-200/80">
-                    &ldquo;{verse.translation}&rdquo;
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-emerald-400">
-                    — {verse.ref}
+                  <p className="mt-3 text-sm font-medium tracking-wide text-emerald-200/70">
+                    Bismillah — opening your journey to deen
                   </p>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
 
-          {/* Loading bar */}
-          <div className="absolute bottom-10 left-1/2 w-64 -translate-x-1/2">
-            <div className="h-1.5 overflow-hidden rounded-full bg-emerald-900">
-              <motion.div
-                animate={{ width: `${progress}%` }}
-                transition={{ ease: "easeOut" }}
-                className="h-1.5 rounded-full bg-gradient-to-r from-emerald-400 to-green-500"
-              />
-            </div>
-            <p className="mt-3 text-center text-xs font-medium tracking-wide text-emerald-200/70">
-              Bismillah — Opening your journey to deen
-            </p>
+          <div className="absolute bottom-10 left-1/2 h-1 w-40 -translate-x-1/2 overflow-hidden rounded-full bg-emerald-900">
+            <motion.div
+              initial={{ x: "-100%" }}
+              animate={{ x: "0%" }}
+              transition={{ duration: 1.2, ease: "easeInOut" }}
+              className="h-1 rounded-full bg-gradient-to-r from-emerald-400 to-green-500"
+            />
           </div>
         </motion.div>
       )}

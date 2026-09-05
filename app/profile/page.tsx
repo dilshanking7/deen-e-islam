@@ -10,6 +10,7 @@ import {
 } from "@/lib/firestore";
 import { changePassword, logoutUser } from "@/lib/auth";
 import { getCountries } from "@/lib/location-data";
+import { useI18n } from "@/lib/i18n";
 
 const RELIGIONS = ["Islam"];
 const SECTS = ["Sunni", "Deobandi", "Barelwi", "Shia", "Ahle Hadith", "Other"];
@@ -17,6 +18,7 @@ const LANGUAGES = ["English", "Urdu", "Hindi", "Arabic"];
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { t } = useI18n();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -375,12 +377,12 @@ export default function ProfilePage() {
             disabled={saving}
             className="mt-8 w-full rounded-2xl bg-emerald-700 py-4 text-lg font-bold text-white hover:bg-emerald-800 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {saving ? "Saving..." : "Save Profile"}
+            {saving ? t("profile.saving") : t("profile.save")}
           </button>
 
           {saved && (
             <p className="mt-3 text-center font-semibold text-emerald-600">
-              ✓ Profile saved successfully!
+              ✓ {t("profile.saved")}
             </p>
           )}
 

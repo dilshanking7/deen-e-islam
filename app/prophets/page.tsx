@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Search, ChevronLeft, Users, ChevronRight } from "lucide-react";
-import { PROPHETS, PROPHETS_TOTAL, getProphet, type Prophet } from "@/lib/prophets-data";
+import { PROPHETS, getProphet, type Prophet } from "@/lib/prophets-data";
 
 export default function ProphetsPage() {
   const router = useRouter();

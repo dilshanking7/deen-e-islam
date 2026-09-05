@@ -136,11 +136,15 @@ export function prayerTimeInLocal(time: string, timezone?: string): Date {
     if (isPM && h !== 12) h += 12;
     if (!isPM && h === 12) h = 0;
   }
-  const serverOffset = getTimeZoneOffset(timezone);
-  const deviceOffset = -new Date().getTimezoneOffset() / 60;
   const base = new Date(today);
   base.setHours(0, 0, 0, 0);
-  const minutesFromMidnight = h * 60 + m + (serverOffset - deviceOffset) * 60;
+  const serverOffset = timezone ? getTimeZoneOffset(timezone) : null;
+  if (serverOffset === null) {
+    base.setHours(h, m, 0, 0);
+    return base;
+  }
+  const deviceOffset = -new Date().getTimezoneOffset() / 60;
+  const minutesFromMidnight = h * 60 + m + (deviceOffset - serverOffset) * 60;
   base.setMinutes(minutesFromMidnight);
   return base;
 }

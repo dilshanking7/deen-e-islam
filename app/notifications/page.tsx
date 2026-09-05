@@ -5,7 +5,6 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Bell, Mail, Users, ChevronRight, MessageCircle, Sparkles } from "lucide-react";
-import { auth } from "@/lib/firebase";
 import { getAllUsers, type PublicUser } from "@/lib/firestore";
 import { useUnreadConversations } from "@/lib/use-unread";
 import { useI18n } from "@/lib/i18n";
@@ -26,8 +25,11 @@ export default function NotificationsPage() {
   }, []);
 
   useEffect(() => {
-    setUpcoming(getUpcomingEvents(4));
-    setTodayEvent(isEventToday());
+    const t = setTimeout(() => {
+      setUpcoming(getUpcomingEvents(4));
+      setTodayEvent(isEventToday());
+    }, 0);
+    return () => clearTimeout(t);
   }, []);
 
   const userById = useMemo(() => {

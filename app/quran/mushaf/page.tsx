@@ -2,13 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState, useRef, Suspense } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSwipeable } from "react-swipeable";
 import {
   ChevronLeft,
   ChevronRight,
-  Bookmark,
   Moon,
   Sun,
   Maximize,
@@ -18,18 +17,42 @@ import {
   RotateCcw,
   Play,
   Square,
+  CheckCircle2,
+  Bookmark,
 } from "lucide-react";
 
+import {
+  toggleBookmark as toggleQuranBookmark,
+  isBookmarked,
+} from "@/lib/quran-bookmark";
+
 import { getMushafPage, TOTAL_PAGES } from "@/lib/mushaf-api";
-import { saveBookmark, getBookmark } from "@/lib/mushaf-bookmark";
+import { getSurahByPage, SURAH_PAGE_MAP } from "@/lib/surah-page-map";
+import {
+  getMushafProgress,
+  saveMushafProgress,
+  setLocalPage,
+} from "@/lib/mushaf-progress";
 import {
   getAyahAudioUrl,
   getOnlineAyahAudioUrl,
   getPageAyahs,
 } from "@/lib/quran-page-audio";
+import { useI18n } from "@/lib/i18n";
 
 function MushafContent() {
   const router = useRouter();
+  const { t } = useI18n();
+  const searchParams = useSearchParams();
+
+  // Explicit ?page= from URL (surah search, continue reading, etc.)
+  const rawPage = searchParams.get("page");
+  const urlPage = useMemo(() => {
+    const n = Number(rawPage);
+    return rawPage && Number.isFinite(n) && n >= 1 && n <= TOTAL_PAGES
+      ? Math.round(n)
+      : null;
+  }, [rawPage]);
 
   // Helper to Sync URL with page number (replace = back button seedha bahar jayega)
   const updateURL = useCallback(
@@ -39,27 +62,16 @@ function MushafContent() {
     [router]
   );
 
-  const [page, setPage] = useState<number>(() => {
-    if (typeof window === "undefined") return 1;
-    const match = window.location.search.match(/[?&]page=(\d+)/);
-    if (match) {
-      const parsedPage = Number(match[1]);
-      if (parsedPage >= 1 && parsedPage <= TOTAL_PAGES) {
-        return parsedPage;
-      }
-    }
-    return 1;
-  });
-  const [pageInput, setPageInput] = useState(() => {
-    if (typeof window === "undefined") return "1";
-    const match = window.location.search.match(/[?&]page=(\d+)/);
-    return match ? match[1] : "1";
-  });
-  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageInput, setPageInput] = useState("1");
+  const [loading, setLoading] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [playingPage, setPlayingPage] = useState(false);
   const [playingAyah, setPlayingAyah] = useState("");
+  const [progressSaved, setProgressSaved] = useState(false);
+  const [restoreChecked, setRestoreChecked] = useState(false);
+  const [bookmarked, setBookmarked] = useState(false);
 
   // Zoom States
   const [zoomScale, setZoomScale] = useState(1);
@@ -67,43 +79,80 @@ function MushafContent() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const stopAudioRef = useRef(false);
 
-  // Load saved page from bookmark on mount (skip when opened via ?page= URL)
+  // React to URL page changes (suraho se search/continue reading ke liye)
   useEffect(() => {
-    const match = window.location.search.match(/[?&]page=(\d+)/);
-    if (match) return;
-
-    async function loadSavedPage() {
-      const saved = await getBookmark();
-      if (saved) {
-        setPage(saved);
-        setPageInput(saved.toString());
-        updateURL(saved);
-        return;
-      }
-      const last = localStorage.getItem("last-mushaf-page");
-      if (last) {
-        const lastPage = Number(last);
-        if (lastPage >= 1 && lastPage <= TOTAL_PAGES) {
-          setPage(lastPage);
-          setPageInput(lastPage.toString());
-          updateURL(lastPage);
-        }
-      }
+    if (urlPage !== null) {
+      stopPageAudio();
+      const t = setTimeout(() => {
+        setZoomScale(1);
+        setLoading(false);
+        setPage(urlPage);
+        setPageInput(String(urlPage));
+      }, 0);
+      return () => clearTimeout(t);
     }
-    loadSavedPage();
-  }, [updateURL]);
+
+    // No ?page= in URL -> resume last reading position (once)
+    if (restoreChecked) return;
+    const rt = setTimeout(() => setRestoreChecked(true), 0);
+    let cancelled = false;
+    (async () => {
+      const saved = await getMushafProgress();
+      if (cancelled || !saved) return;
+      setPage(saved);
+      setPageInput(String(saved));
+      setLoading(false);
+      updateURL(saved);
+    })();
+    return () => {
+      cancelled = true;
+      clearTimeout(rt);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlPage, restoreChecked]);
 
   const image = useMemo(() => {
     return getMushafPage(page);
   }, [page]);
 
+  const surah = useMemo(() => getSurahByPage(page), [page]);
+
+  // Save reading progress locally + to Firestore (auto, debounced) -> tick mark
   useEffect(() => {
-    localStorage.setItem("last-mushaf-page", page.toString());
+    const t1 = setTimeout(() => {
+      setLocalPage(page);
+      setProgressSaved(false);
+    }, 0);
+    const timer = setTimeout(() => {
+      saveMushafProgress(page).then(() => setProgressSaved(true));
+    }, 600);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(timer);
+    };
   }, [page]);
 
   useEffect(() => {
     stopPageAudio();
   }, [page]);
+
+  // Bookmark status for the first ayah on this page
+  useEffect(() => {
+    const first = getPageAyahs(page)[0];
+    if (!first) return;
+    isBookmarked(first.surah, first.ayah).then(setBookmarked);
+  }, [page]);
+
+  async function handleToggleBookmark() {
+    const first = getPageAyahs(page)[0];
+    if (!first) return;
+    const nowBookmarked = await toggleQuranBookmark(
+      first.surah,
+      surah.name,
+      first.ayah
+    );
+    setBookmarked(nowBookmarked);
+  }
 
   useEffect(() => {
     return () => stopPageAudio();
@@ -128,18 +177,31 @@ function MushafContent() {
     }
   }
 
+  const goToPage = useCallback(
+    (targetPage: number) => {
+      const valid = Math.max(1, Math.min(TOTAL_PAGES, Math.round(targetPage)));
+      setLoading(true);
+      setZoomScale(1);
+      stopPageAudio();
+      setTimeout(() => {
+        setPage(valid);
+        setPageInput(String(valid));
+        updateURL(valid);
+        setLoading(false);
+      }, 80);
+    },
+    [updateURL]
+  );
+
   const goNext = useCallback(() => {
     if (page >= TOTAL_PAGES) return;
-    const nextPage = page + 1;
-    setLoading(true);
-    setZoomScale(1);
-    setTimeout(() => {
-      setPage(nextPage);
-      setPageInput(String(nextPage));
-      updateURL(nextPage);
-      setLoading(false);
-    }, 100);
-  }, [page, updateURL]);
+    goToPage(page + 1);
+  }, [page, goToPage]);
+
+  const goPrevious = useCallback(() => {
+    if (page <= 1) return;
+    goToPage(page - 1);
+  }, [page, goToPage]);
 
   function stopPageAudio() {
     stopAudioRef.current = true;
@@ -183,43 +245,33 @@ function MushafContent() {
     }
   }
 
-  const goPrevious = useCallback(() => {
-    if (page <= 1) return;
-    const prevPage = page - 1;
-    setLoading(true);
-    setZoomScale(1);
-    setTimeout(() => {
-      setPage(prevPage);
-      setPageInput(String(prevPage));
-      updateURL(prevPage);
-      setLoading(false);
-    }, 100);
-  }, [page, updateURL]);
-
   function handlePageJump(e: React.FormEvent) {
     e.preventDefault();
     const targetPage = Number(pageInput);
     if (targetPage >= 1 && targetPage <= TOTAL_PAGES) {
-      setPage(targetPage);
-      setPageInput(String(targetPage));
-      updateURL(targetPage);
-      setZoomScale(1);
+      goToPage(targetPage);
     } else {
       setPageInput(page.toString());
     }
   }
 
-  // Keyboard Navigation
+  function jumpToSurah(surahNumber: number) {
+    const target = SURAH_PAGE_MAP.find((s) => s.number === surahNumber);
+    if (target) goToPage(target.page);
+  }
+
+  // Keyboard Navigation (RTL: left = next page, right = previous page)
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (
         document.activeElement?.tagName === "INPUT" ||
-        document.activeElement?.tagName === "TEXTAREA"
+        document.activeElement?.tagName === "TEXTAREA" ||
+        document.activeElement?.tagName === "SELECT"
       ) {
         return;
       }
-      if (e.key === "ArrowRight") goNext();
-      if (e.key === "ArrowLeft") goPrevious();
+      if (e.key === "ArrowLeft") goNext();
+      if (e.key === "ArrowRight") goPrevious();
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
@@ -272,9 +324,14 @@ function MushafContent() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2">
             <span className="text-2xl">📖</span>
-            <h1 className="text-xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400">
-              Holy Quran
-            </h1>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400">
+                {t("quran.mushafTitle")}
+              </h1>
+              <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                {surah.number}. {surah.name} — {surah.englishName}
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2">
@@ -329,21 +386,6 @@ function MushafContent() {
             </button>
 
             <button
-              onClick={async () => {
-                await saveBookmark(page);
-                alert(`Bookmark Saved: Page ${page}`);
-              }}
-              title="Save Bookmark"
-              className={`rounded-xl p-2 transition active:scale-95 ${
-                darkMode
-                  ? "bg-zinc-900 text-emerald-400 hover:bg-zinc-800"
-                  : "bg-emerald-100/70 text-emerald-800 hover:bg-emerald-100"
-              }`}
-            >
-              <Bookmark size={19} />
-            </button>
-
-            <button
               onClick={() => setDarkMode(!darkMode)}
               title="Toggle Theme"
               className={`rounded-xl p-2 transition active:scale-95 ${
@@ -372,15 +414,13 @@ function MushafContent() {
 
       {/* Main Canvas Area */}
       <div className="mx-auto max-w-6xl px-3 py-4 sm:py-6">
-        
         <div className="relative flex items-center justify-center">
-          
-          {/* Left Navigation Arrow */}
+          {/* Next Navigation Arrow — LEFT (RTL reading) */}
           <button
-            onClick={goPrevious}
-            disabled={page === 1}
+            onClick={goNext}
+            disabled={page === TOTAL_PAGES}
             className="absolute left-0 z-10 hidden sm:flex h-12 w-12 items-center justify-center rounded-full border bg-white/90 text-emerald-800 shadow-lg backdrop-blur transition hover:scale-110 active:scale-95 disabled:opacity-20 dark:border-zinc-800 dark:bg-zinc-900/90 dark:text-emerald-400 md:-left-5"
-            title="Previous Page"
+            title={t("quran.next")}
           >
             <ChevronLeft size={28} />
           </button>
@@ -422,10 +462,10 @@ function MushafContent() {
                       unoptimized
                       className="w-full h-auto rounded-xl object-contain"
                     />
-                    
+
                     {/* Page Number Indicator below Image */}
                     <div className="mt-2 text-center text-sm text-gray-500 font-medium">
-                      Page {page} / {TOTAL_PAGES}
+                      {t("quran.page")} {page} / {TOTAL_PAGES}
                     </div>
                   </>
                 )}
@@ -433,12 +473,12 @@ function MushafContent() {
             </AnimatePresence>
           </div>
 
-          {/* Right Navigation Arrow */}
+          {/* Previous Navigation Arrow — RIGHT (RTL reading) */}
           <button
-            onClick={goNext}
-            disabled={page === TOTAL_PAGES}
+            onClick={goPrevious}
+            disabled={page === 1}
             className="absolute right-0 z-10 hidden sm:flex h-12 w-12 items-center justify-center rounded-full border bg-white/90 text-emerald-800 shadow-lg backdrop-blur transition hover:scale-110 active:scale-95 disabled:opacity-20 dark:border-zinc-800 dark:bg-zinc-900/90 dark:text-emerald-400 md:-right-5"
-            title="Next Page"
+            title={t("quran.previous")}
           >
             <ChevronRight size={28} />
           </button>
@@ -454,66 +494,115 @@ function MushafContent() {
             }`}
           >
             <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3 border-zinc-200 dark:border-zinc-800">
-              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
-                {Math.round((page / TOTAL_PAGES) * 100)}% Completed
-              </span>
-
-              <form onSubmit={handlePageJump} className="flex items-center gap-2">
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Go to page:
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-bold ${darkMode ? "text-emerald-400" : "text-emerald-700"}`}>
+                  {Math.round((page / TOTAL_PAGES) * 100)}% {t("quran.completed")}
                 </span>
-                <input
-                  type="number"
-                  min={1}
-                  max={TOTAL_PAGES}
-                  value={pageInput}
-                  onChange={(e) => setPageInput(e.target.value)}
-                  className={`w-16 rounded-lg border px-2 py-1 text-center text-sm font-semibold outline-none transition focus:ring-2 focus:ring-emerald-500 ${
+                <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                  {surah.number}. {surah.name}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.92 }}
+                  onClick={handleToggleBookmark}
+                  title={bookmarked ? t("quran.removeBookmark") : t("quran.addBookmark")}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                    bookmarked
+                      ? "bg-yellow-400 text-yellow-950 shadow"
+                      : darkMode
+                        ? "border border-zinc-700 bg-zinc-800 text-zinc-200"
+                        : "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                  }`}
+                >
+                  <Bookmark size={14} className={bookmarked ? "fill-yellow-950" : ""} />
+                  {bookmarked ? t("quran.bookmarked") : t("quran.addBookmark")}
+                </motion.button>
+
+                <select
+                  value={surah.number}
+                  onChange={(e) => jumpToSurah(Number(e.target.value))}
+                  className={`max-w-[160px] rounded-lg border px-2 py-1.5 text-xs font-semibold outline-none transition focus:ring-2 focus:ring-emerald-500 ${
                     darkMode
                       ? "border-zinc-700 bg-zinc-800 text-zinc-100"
                       : "border-zinc-200 bg-zinc-50 text-zinc-900"
                   }`}
-                />
-                <button
-                  type="submit"
-                  className="rounded-lg bg-emerald-700 px-3.5 py-1 text-xs font-bold text-white transition hover:bg-emerald-800 active:scale-95 dark:bg-emerald-600 dark:hover:bg-emerald-500"
                 >
-                  Go
-                </button>
-              </form>
+                  {SURAH_PAGE_MAP.map((s) => (
+                    <option key={s.number} value={s.number} className="bg-white dark:bg-zinc-800">
+                      {s.number}. {s.englishName}
+                    </option>
+                  ))}
+                </select>
+
+                <form onSubmit={handlePageJump} className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {t("quran.goToPage")}
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={TOTAL_PAGES}
+                    value={pageInput}
+                    onChange={(e) => setPageInput(e.target.value)}
+                    className={`w-16 rounded-lg border px-2 py-1 text-center text-sm font-semibold outline-none transition focus:ring-2 focus:ring-emerald-500 ${
+                      darkMode
+                        ? "border-zinc-700 bg-zinc-800 text-zinc-100"
+                        : "border-zinc-200 bg-zinc-50 text-zinc-900"
+                    }`}
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-emerald-700 px-3.5 py-1 text-xs font-bold text-white transition hover:bg-emerald-800 active:scale-95 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                  >
+                    {t("quran.go")}
+                  </button>
+                </form>
+              </div>
             </div>
 
             <div className="mt-3 flex items-center justify-between gap-2">
-              <button
-                onClick={goPrevious}
-                disabled={page === 1}
-                className="flex items-center gap-1.5 rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-emerald-800 active:scale-95 disabled:opacity-30 dark:bg-emerald-600 dark:hover:bg-emerald-500"
-              >
-                <ChevronLeft size={18} />
-                Previous
-              </button>
-
-              <div className="text-center">
-                <span className="text-base font-bold text-emerald-800 dark:text-emerald-400">
-                  Page {page}
-                </span>
-                <span className="block text-xs text-zinc-400">
-                  {playingAyah ? `Playing ${playingAyah}` : `of ${TOTAL_PAGES}`}
-                </span>
-              </div>
-
+              {/* Next — LEFT (RTL) */}
               <button
                 onClick={goNext}
                 disabled={page === TOTAL_PAGES}
                 className="flex items-center gap-1.5 rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-emerald-800 active:scale-95 disabled:opacity-30 dark:bg-emerald-600 dark:hover:bg-emerald-500"
               >
-                Next
+                {t("quran.next")}
+                <ChevronLeft size={18} />
+              </button>
+
+              <div className="flex flex-col items-center px-1">
+                <span className="flex items-center gap-1.5 text-base font-bold text-emerald-800 dark:text-emerald-400">
+                  {t("quran.page")} {page}
+                  {progressSaved && (
+                    <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                      <CheckCircle2 size={15} className="text-emerald-500" />
+                      {t("quran.progressSaved")}
+                    </span>
+                  )}
+                </span>
+                <span className="text-xs text-zinc-400">
+                  {playingAyah
+                    ? `${t("quran.playing")} ${playingAyah}`
+                    : `${t("quran.of")} ${TOTAL_PAGES}`}
+                </span>
+              </div>
+
+              {/* Previous — RIGHT (RTL) */}
+              <button
+                onClick={goPrevious}
+                disabled={page === 1}
+                className="flex items-center gap-1.5 rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-emerald-800 active:scale-95 disabled:opacity-30 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+              >
                 <ChevronRight size={18} />
+                {t("quran.previous")}
               </button>
             </div>
           </div>
         </div>
-
       </div>
     </main>
   );

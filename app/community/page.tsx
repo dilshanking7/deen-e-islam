@@ -17,6 +17,7 @@ import {
   Share2,
   MessageSquare,
   Mail,
+  Eye,
 } from "lucide-react";
 import {
   collection,
@@ -27,9 +28,12 @@ import {
   addDoc,
   updateDoc,
   doc,
+  increment,
 } from "firebase/firestore";
 import { auth } from "@/lib/firebase";
 import { db } from "@/lib/firebase";
+import { storage } from "@/lib/firebase";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import {
   getUserProfile,
   getAllUsers,
@@ -52,7 +56,21 @@ interface Post {
   time: number;
   likes: Record<string, boolean>;
   commentCount: number;
+  views?: number;
+  type?: string;
 }
+
+interface Comment {
+  id: string;
+  author: string;
+  authorId: string;
+  photoURL?: string;
+  text: string;
+  time: number;
+}
+
+const POST_TYPES = ["general", "dua", "naat", "story", "timeline"] as const;
+export type PostType = (typeof POST_TYPES)[number];
 
 interface ChatMessage {
   id: string;
@@ -84,6 +102,14 @@ export default function CommunityPage() {
   const [postText, setPostText] = useState("");
   const [postImage, setPostImage] = useState("");
   const [postVideo, setPostVideo] = useState("");
+  const [postVideoFile, setPostVideoFile] = useState<File | null>(null);
+  const [videoPreview, setVideoPreview] = useState("");
+  const [videoUploading, setVideoUploading] = useState(false);
+  const [postType, setPostType] = useState<PostType>("general");
+  const [filter, setFilter] = useState<"all" | PostType>("all");
+  const [commentsFor, setCommentsFor] = useState<Post | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentInput, setCommentInput] = useState("");
 
   const [chatInput, setChatInput] = useState("");
 
@@ -93,8 +119,9 @@ export default function CommunityPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("create") === "1") {
-      setShowCreate(true);
+      const t = setTimeout(() => setShowCreate(true), 0);
       window.history.replaceState({}, "", "/community");
+      return () => clearTimeout(t);
     }
   }, []);
 
@@ -141,12 +168,54 @@ export default function CommunityPage() {
         }));
         setPosts(list);
         setFeedLoading(false);
+
+        const user = auth.currentUser;
+        if (!user) return;
+        const myUid = user.uid;
+        const viewedThisSession = new Set<string>(
+          JSON.parse(sessionStorage.getItem("islaam-viewed-posts") || "[]") as string[]
+        );
+        const toRecord: string[] = [];
+        list.forEach((p) => {
+          if (p.authorId !== myUid && !viewedThisSession.has(p.id)) {
+            viewedThisSession.add(p.id);
+            toRecord.push(p.id);
+            void updateDoc(doc(db, "community-posts", p.id), { views: increment(1) });
+          }
+        });
+        if (toRecord.length) {
+          sessionStorage.setItem("islaam-viewed-posts", JSON.stringify([...viewedThisSession]));
+        }
       },
       () => setFeedLoading(false)
     );
 
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (!commentsFor) {
+      const t = setTimeout(() => setComments([]), 0);
+      return () => clearTimeout(t);
+    }
+    const q = query(
+      collection(db, "community-posts", commentsFor.id, "comments"),
+      orderBy("time", "asc"),
+      limit(200)
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const list = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<Comment, "id">),
+        }));
+        setComments(list);
+      },
+      () => {}
+    );
+    return () => unsub();
+  }, [commentsFor]);
 
   useEffect(() => {
     const q = query(
@@ -182,33 +251,87 @@ export default function CommunityPage() {
     reader.readAsDataURL(file);
   }
 
+  function handleVideoFileSelect(file: File) {
+    setPostVideoFile(file);
+    setPostVideo("");
+    if (videoPreview) URL.revokeObjectURL(videoPreview);
+    setVideoPreview(URL.createObjectURL(file));
+  }
+
+  async function uploadVideoFile(file: File): Promise<string> {
+    const ext = file.name.split(".").pop()?.toLowerCase() || "mp4";
+    const storageRef = ref(storage, `community-posts/videos/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`);
+    const snapshot = await uploadBytesResumable(storageRef, file, {
+      contentType: file.type || "video/mp4",
+    });
+    return getDownloadURL(snapshot.ref);
+  }
+
   async function createPost(e: React.FormEvent) {
     e.preventDefault();
-    if (!postText.trim() && !postImage && !postVideo) return;
+    if (!postText.trim() && !postImage && !postVideo && !postVideoFile) return;
+    if (postVideoFile && postVideoFile.size > 100 * 1024 * 1024) {
+      return;
+    }
+    if (!postVideoFile && !postVideo && !postImage && !postText.trim()) return;
 
     const user = auth.currentUser;
     if (!user) return;
 
     try {
+      let videoUrl = postVideo.trim();
+      if (postVideoFile) {
+        setVideoUploading(true);
+        videoUrl = await uploadVideoFile(postVideoFile);
+      }
+
       await addDoc(collection(db, "community-posts"), {
         author: myName,
         authorId: user.uid,
         username: myUsername,
         text: postText.trim(),
         image: postImage,
-        video: postVideo.trim(),
+        video: videoUrl,
+        type: postType,
         time: Date.now(),
         likes: {},
         commentCount: 0,
+        views: 0,
       });
     } catch (error) {
       console.error("Error creating post:", error);
     }
 
+    setVideoUploading(false);
     setPostText("");
     setPostImage("");
     setPostVideo("");
+    setPostVideoFile(null);
+    if (videoPreview) URL.revokeObjectURL(videoPreview);
+    setVideoPreview("");
+    setPostType("general");
     setShowCreate(false);
+  }
+
+  async function addComment(e: React.FormEvent) {
+    e.preventDefault();
+    if (!commentsFor || !commentInput.trim()) return;
+    const user = auth.currentUser;
+    if (!user) return;
+    try {
+      await addDoc(collection(db, "community-posts", commentsFor.id, "comments"), {
+        author: myName,
+        authorId: user.uid,
+        text: commentInput.trim(),
+        time: Date.now(),
+      });
+      await updateDoc(doc(db, "community-posts", commentsFor.id), {
+        commentCount: increment(1),
+      });
+    } catch (error) {
+      console.error("Error adding comment:", error);
+    }
+    setCommentInput("");
   }
 
   async function toggleLike(post: Post) {
@@ -271,6 +394,13 @@ export default function CommunityPage() {
     }
   }
 
+  function closeComposer() {
+    setShowCreate(false);
+    setPostVideoFile(null);
+    if (videoPreview) URL.revokeObjectURL(videoPreview);
+    setVideoPreview("");
+  }
+
   function timeAgo(ts: number) {
     const diff = Math.floor((now - ts) / 60000);
     if (diff < 1) return "now";
@@ -284,6 +414,25 @@ export default function CommunityPage() {
 
   const postLikeCount = (p: Post) =>
     likeCount(p.likes || {});
+
+  const TYPE_KEY: Record<string, string> = {
+    dua: "community.typeDua",
+    naat: "community.typeNaat",
+    story: "community.typeStory",
+    timeline: "community.typeTimeline",
+    general: "community.typeGeneral",
+  };
+
+  const TYPE_ICON: Record<string, string> = {
+    dua: "🤲",
+    naat: "🎵",
+    story: "🕊️",
+    timeline: "⏳",
+    general: "💬",
+  };
+
+  const filteredPosts =
+    filter === "all" ? posts : posts.filter((p) => (p.type || "general") === filter);
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-green-100">
@@ -368,6 +517,22 @@ export default function CommunityPage() {
               transition={{ duration: 0.3 }}
               className="space-y-5"
             >
+              <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+                {(["all", "dua", "naat", "story", "timeline"] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold transition ${
+                      filter === f
+                        ? "bg-emerald-700 text-white shadow"
+                        : "bg-white text-gray-600 ring-1 ring-gray-100 hover:bg-emerald-50"
+                    }`}
+                  >
+                    {f === "all" ? t("community.filterAll") : `${TYPE_ICON[f]} ${t(TYPE_KEY[f])}`}
+                  </button>
+                ))}
+              </div>
+
               <div className="rounded-3xl bg-gradient-to-r from-emerald-700 to-green-800 p-6 text-white shadow-xl">
                 <div className="flex items-center gap-3">
                   <Users className="h-8 w-8 text-emerald-200" />
@@ -384,7 +549,7 @@ export default function CommunityPage() {
                 <p className="py-10 text-center text-gray-400">{t("community.loadingPosts")}</p>
               )}
 
-              {!feedLoading && posts.length === 0 && (
+              {!feedLoading && filteredPosts.length === 0 && (
                 <div className="rounded-3xl bg-white p-10 text-center shadow-xl">
                   <p className="text-5xl">🌱</p>
                   <p className="mt-4 font-semibold text-gray-700">
@@ -393,7 +558,7 @@ export default function CommunityPage() {
                 </div>
               )}
 
-              {posts.map((post) => (
+              {filteredPosts.map((post) => (
                 <motion.article
                   key={post.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -417,6 +582,17 @@ export default function CommunityPage() {
                       <p className="text-xs text-gray-400">
                         {post.username} • {timeAgo(post.time)}
                       </p>
+                    </div>
+
+                    <div className="ml-auto flex items-center gap-2">
+                      {(post.type && post.type !== "general" && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700">
+                          {TYPE_ICON[post.type] || TYPE_ICON.general} {t(TYPE_KEY[post.type] || TYPE_KEY.general)}
+                        </span>
+                      )) || null}
+                      <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-3 py-1 text-[11px] font-semibold text-gray-500">
+                        <Eye size={13} /> {post.views || 0}
+                      </span>
                     </div>
                   </div>
 
@@ -452,10 +628,13 @@ export default function CommunityPage() {
                       <Heart size={18} className={post.likes?.[myUid] ? "fill-red-500 text-red-500" : ""} />
                       {postLikeCount(post)}
                     </button>
-                    <button className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-gray-500 transition hover:bg-gray-50">
-                      <MessageSquare size={18} />
-                      {post.commentCount || 0}
-                    </button>
+                    <button
+                    onClick={() => setCommentsFor(post)}
+                    className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-gray-500 transition hover:bg-gray-50"
+                  >
+                    <MessageSquare size={18} />
+                    {post.commentCount || 0}
+                  </button>
                     <button
                       onClick={() => sharePost(post)}
                       className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-gray-500 transition hover:bg-gray-50"
@@ -624,7 +803,7 @@ export default function CommunityPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-5"
-            onClick={() => setShowCreate(false)}
+            onClick={closeComposer}
           >
             <motion.form
               onClick={(e) => e.stopPropagation()}
@@ -639,7 +818,7 @@ export default function CommunityPage() {
                 <h2 className="text-xl font-bold text-gray-800">{t("community.createPost")}</h2>
                 <button
                   type="button"
-                  onClick={() => setShowCreate(false)}
+                  onClick={closeComposer}
                   className="rounded-full bg-gray-100 p-2 text-gray-500 hover:bg-gray-200"
                 >
                   <X size={20} />
@@ -654,6 +833,23 @@ export default function CommunityPage() {
                 className="mt-5 w-full resize-none rounded-2xl bg-gray-50 p-5 text-gray-800 outline-none ring-1 ring-gray-100 focus:ring-2 focus:ring-emerald-500"
               />
 
+              <div className="mt-4 flex flex-wrap gap-2">
+                {POST_TYPES.map((pt) => (
+                  <button
+                    key={pt}
+                    type="button"
+                    onClick={() => setPostType(pt)}
+                    className={`rounded-full px-4 py-2 text-xs font-bold transition ${
+                      postType === pt
+                        ? "bg-emerald-700 text-white shadow"
+                        : "bg-gray-100 text-gray-600 hover:bg-emerald-50"
+                    }`}
+                  >
+                    {TYPE_ICON[pt]} {t(TYPE_KEY[pt])}
+                  </button>
+                ))}
+              </div>
+
               <div className="mt-4 flex gap-3">
                 <label className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 py-4 text-sm font-semibold text-gray-500 transition hover:border-emerald-500 hover:text-emerald-600">
                   <ImageIcon size={18} />
@@ -666,16 +862,29 @@ export default function CommunityPage() {
                   />
                 </label>
 
-                <div className="flex flex-1 items-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 px-4 py-1">
-                  <Video size={18} className="shrink-0 text-gray-500" />
+                <label className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 py-4 text-sm font-semibold text-gray-500 transition hover:border-emerald-500 hover:text-emerald-600">
+                  <Video size={18} />
+                  {t("community.uploadVideo")}
                   <input
-                    type="url"
-                    value={postVideo}
-                    onChange={(e) => setPostVideo(e.target.value)}
-                    placeholder={t("community.videoUrl")}
-                    className="w-full bg-transparent text-sm text-gray-700 outline-none"
+                    type="file"
+                    accept="video/*,.mp4,.webm,.ogg,.mov"
+                    className="hidden"
+                    onChange={(e) => e.target.files?.[0] && handleVideoFileSelect(e.target.files[0])}
                   />
-                </div>
+                </label>
+              </div>
+
+              <div className="mt-3">
+                <input
+                  type="url"
+                  value={postVideo}
+                  onChange={(e) => {
+                    setPostVideo(e.target.value);
+                    if (e.target.value) setPostVideoFile(null);
+                  }}
+                  placeholder={t("community.videoUrlPlaceholder")}
+                  className="w-full rounded-2xl bg-gray-50 px-4 py-3 text-sm text-gray-700 outline-none ring-1 ring-gray-100 focus:ring-2 focus:ring-emerald-500"
+                />
               </div>
 
               {postImage && (
@@ -691,19 +900,110 @@ export default function CommunityPage() {
                 </div>
               )}
 
-              {postVideo && (
-                <video src={postVideo} controls className="mt-4 max-h-64 w-full rounded-2xl bg-black" />
+              {(postVideo || videoPreview) && (
+                <div className="relative mt-4">
+                  {postVideoFile && (
+                    <p className="mb-1 truncate text-xs font-semibold text-emerald-700">
+                      {postVideoFile.name} ({(postVideoFile.size / 1024 / 1024).toFixed(1)} MB)
+                    </p>
+                  )}
+                  <video
+                    src={videoPreview || postVideo}
+                    controls
+                    className="max-h-64 w-full rounded-2xl bg-black"
+                  />
+                </div>
               )}
 
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 type="submit"
-                className="mt-6 w-full rounded-2xl bg-gradient-to-r from-emerald-700 to-green-700 py-4 font-bold text-white shadow-xl"
+                disabled={videoUploading}
+                className="mt-6 w-full rounded-2xl bg-gradient-to-r from-emerald-700 to-green-700 py-4 font-bold text-white shadow-xl disabled:opacity-60"
               >
-                {t("community.publish")}
+                {videoUploading ? t("community.uploadingVideo") : t("community.publish")}
               </motion.button>
             </motion.form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {commentsFor && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-5"
+            onClick={() => setCommentsFor(null)}
+          >
+            <motion.div
+              onClick={(e) => e.stopPropagation()}
+              initial={{ y: 60, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 60, opacity: 0 }}
+              transition={{ type: "spring", damping: 25 }}
+              className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl"
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-800">
+                  {t("community.comments")}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setCommentsFor(null)}
+                  className="rounded-full bg-gray-100 p-2 text-gray-500 hover:bg-gray-200"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {commentsFor.text && (
+                <p className="mt-3 rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">
+                  {commentsFor.text}
+                </p>
+              )}
+
+              <div className="mt-4 flex-1 space-y-4 overflow-y-auto pr-1">
+                {comments.length === 0 && (
+                  <p className="py-8 text-center text-sm text-gray-400">
+                    {t("community.noComments")}
+                  </p>
+                )}
+                {comments.map((c) => (
+                  <div key={c.id} className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-green-700 text-sm font-bold text-white">
+                      {c.author.charAt(0)}
+                    </div>
+                    <div className="min-w-0 rounded-2xl rounded-tl-none bg-emerald-50 px-4 py-2.5">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <p className="text-xs font-bold text-emerald-800">{c.author}</p>
+                        <p className="text-[10px] text-gray-400">{timeAgo(c.time)}</p>
+                      </div>
+                      <p className="mt-0.5 text-sm text-gray-700">{c.text}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <form onSubmit={addComment} className="mt-4 flex gap-2 border-t border-gray-100 pt-4">
+                <input
+                  value={commentInput}
+                  onChange={(e) => setCommentInput(e.target.value)}
+                  placeholder={t("community.leaveComment")}
+                  className="flex-1 rounded-2xl bg-gray-50 px-5 py-3 text-sm outline-none ring-1 ring-gray-100 focus:ring-2 focus:ring-emerald-500"
+                />
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  type="submit"
+                  className="rounded-2xl bg-emerald-700 px-5 text-sm font-bold text-white shadow-lg transition hover:bg-emerald-800"
+                >
+                  {t("community.postComment")}
+                </motion.button>
+              </form>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

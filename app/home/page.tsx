@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { Bell } from "lucide-react";
+import { Bell, Sparkles } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { waitForAuthUser } from "@/lib/auth-state";
 import { getUserProfile } from "@/lib/firestore";
-import { getLastRead } from "@/lib/quran-history";
+import { getMushafProgress } from "@/lib/mushaf-progress";
+import { getSurahByPage } from "@/lib/surah-page-map";
 import {
   getPrayerTimings,
   PRAYER_ORDER,
@@ -19,6 +20,7 @@ import { getVerseAt, getRandomVerseIndex, getRandomVerse, type DailyVerse } from
 import { getLocationByIP, getPlaceName } from "@/lib/geo";
 import { useI18n } from "@/lib/i18n";
 import { useUnreadConversations } from "@/lib/use-unread";
+import { getRecommendations } from "@/lib/activity";
 
 interface UserData {
   fullName?: string;
@@ -94,7 +96,7 @@ export default function HomePage() {
   const [userData, setUserData] = useState<UserData>({});
   const [search, setSearch] = useState("");
   const [nextPrayer, setNextPrayer] = useState<NextPrayerInfo | null>(null);
-  const [lastRead, setLastRead] = useState<{ number: number; name: string } | null>(null);
+  const [lastRead, setLastRead] = useState<{ page: number; surah: string } | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationFailed, setLocationFailed] = useState(false);
   const [locationLabel, setLocationLabel] = useState("");
@@ -190,8 +192,11 @@ export default function HomePage() {
       }
 
       try {
-        const last = await getLastRead();
-        if (last) setLastRead({ number: last.surahNumber, name: last.surahName });
+        const savedPage = await getMushafProgress();
+        if (savedPage) {
+          const s = getSurahByPage(savedPage);
+          setLastRead({ page: savedPage, surah: `${s.number}. ${s.englishName}` });
+        }
       } catch {}
 
       await loadPrayerTimings();
@@ -220,6 +225,8 @@ export default function HomePage() {
     return t("home.greetingEvening");
   }, [t]);
 
+  const recommendations = useMemo(() => getRecommendations(4), []);
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-green-100">
@@ -240,63 +247,147 @@ export default function HomePage() {
       </div>
 
       <div className="mx-auto max-w-7xl px-5 pb-32 pt-6">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.push("/profile")} className="relative block h-12 w-12">
-              {userData.photoURL ? (
-                <img
-                  src={userData.photoURL}
-                  alt="profile"
-                  className="h-12 w-12 rounded-full object-cover ring-2 ring-emerald-200"
-                />
-              ) : (
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-green-600 text-xl font-bold text-white">
-                  {userData.fullName?.[0] || "U"}
-                </div>
-              )}
-            </button>
-            <div>
-              <p className="text-sm text-gray-500">{greeting} {t("home.salam")}</p>
-              <h2 className="text-lg font-bold sm:text-xl">{userData.fullName || t("home.guest")}</h2>
-            </div>
+        <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        className="flex items-center justify-between gap-4"
+      >
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.1 }}
+          className="flex items-center gap-3"
+        >
+          <button onClick={() => router.push("/profile")} className="relative block h-12 w-12">
+            {userData.photoURL ? (
+              <img
+                src={userData.photoURL}
+                alt="profile"
+                className="h-12 w-12 rounded-full object-cover ring-2 ring-emerald-200"
+              />
+            ) : (
+              <motion.div
+                animate={{ scale: [1, 1.04, 1] }}
+                transition={{ repeat: Infinity, duration: 2.4 }}
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-green-600 text-xl font-bold text-white"
+              >
+                {userData.fullName?.[0] || "U"}
+              </motion.div>
+            )}
+          </button>
+          <div>
+            <motion.p
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="text-sm text-gray-500"
+            >
+              {greeting} {t("home.salam")}
+            </motion.p>
+            <h2 className="text-lg font-bold sm:text-xl">{userData.fullName || t("home.guest")}</h2>
           </div>
+        </motion.div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => router.push("/notifications")}
-              className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white shadow-lg ring-1 ring-emerald-50"
-              aria-label="Notifications"
-            >
-              <Bell size={22} className="text-emerald-700" />
-              {unreadCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-bold text-white">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => router.push("/prayer")}
-              className="rounded-2xl bg-gradient-to-r from-emerald-500 to-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg"
-            >
-              {t("home.prayer")}
-            </button>
-          </div>
-        </div>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.15 }}
+          className="flex items-center gap-2"
+        >
+          <button
+            onClick={() => router.push("/notifications")}
+            className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white shadow-lg ring-1 ring-emerald-50"
+            aria-label="Notifications"
+          >
+            <Bell size={22} className="text-emerald-700" />
+            {unreadCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-bold text-white">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => router.push("/prayer")}
+            className="rounded-2xl bg-gradient-to-r from-emerald-500 to-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg"
+          >
+            {t("home.prayer")}
+          </motion.button>
+        </motion.div>
+      </motion.div>
 
         <div className="mt-6 grid grid-cols-3 gap-3 sm:grid-cols-6">
-          {QUICK_ACTIONS.map((item) => (
-            <button
+          {QUICK_ACTIONS.map((item, qi) => (
+            <motion.button
               key={item.key}
+              initial={{ opacity: 0, y: 20, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ delay: 0.1 + qi * 0.06, type: "spring", stiffness: 200 }}
+              whileHover={{ scale: 1.06 }}
+              whileTap={{ scale: 0.94 }}
               onClick={() => router.push(item.path)}
-              className="flex flex-col items-center gap-1.5 rounded-3xl bg-white p-3 shadow-lg ring-1 ring-emerald-50/50 transition hover:ring-2 hover:ring-emerald-300 active:scale-95"
+              className="flex flex-col items-center gap-1.5 rounded-3xl bg-white p-3 shadow-lg ring-1 ring-emerald-50/50 transition hover:ring-2 hover:ring-emerald-300"
             >
-              <span className="text-2xl">{item.icon}</span>
+              <motion.span
+                animate={{ scale: [1, 1.12, 1] }}
+                transition={{ repeat: Infinity, duration: 2, delay: qi * 0.2 }}
+                className="text-2xl"
+              >
+                {item.icon}
+              </motion.span>
               <span className="text-center text-[11px] font-bold text-gray-700">
                 {t(`feature.${item.key}`)}
               </span>
-            </button>
+            </motion.button>
           ))}
         </div>
+
+        {/* Aap ke liye (activity-based recommendations) */}
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="mt-6 rounded-3xl bg-gradient-to-br from-emerald-700 via-green-800 to-emerald-900 p-6 shadow-2xl"
+        >
+          <div className="flex items-center justify-between">
+            <h3 className="flex items-center gap-2 text-lg font-extrabold text-white">
+              <Sparkles className="h-5 w-5 text-yellow-300" />
+              {t("home.forYou")}
+            </h3>
+            <span className="rounded-full bg-white/15 px-3 py-1 text-[11px] font-semibold text-emerald-100">
+              Aapki activity ke hisaab se
+            </span>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {recommendations.map((rec, ri) => (
+              <motion.button
+                key={rec.path}
+                initial={{ opacity: 0, scale: 0.85 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.35 + ri * 0.08 }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => router.push(rec.path)}
+                className="rounded-2xl bg-white/10 p-4 text-left backdrop-blur transition hover:bg-white/20"
+              >
+                <motion.span
+                  animate={{ scale: [1, 1.15, 1] }}
+                  transition={{ repeat: Infinity, duration: 2.2, delay: ri * 0.3 }}
+                  className="inline-block text-2xl"
+                >
+                  {rec.icon}
+                </motion.span>
+                <p className="mt-2 text-sm font-bold text-white">{rec.label}</p>
+                <p className="mt-0.5 text-[11px] text-emerald-200/80">
+                  {t("home.continue")} →
+                </p>
+              </motion.button>
+            ))}
+          </div>
+        </motion.div>
 
         {profileIncomplete && (
           <button
@@ -343,7 +434,7 @@ export default function HomePage() {
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && search.trim()) {
-                    window.location.href = "/search";
+                    router.push(`/quran/search?q=${encodeURIComponent(search.trim())}`);
                   }
                 }}
                 placeholder={t("home.searchPlaceholder")}
@@ -483,13 +574,15 @@ export default function HomePage() {
 
           {lastRead && (
             <div className="mt-6 rounded-3xl bg-white p-6 shadow-lg">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm text-gray-500">{t("home.lastRead")}</p>
-                  <h3 className="text-lg font-bold">{lastRead.name}</h3>
+                  <p className="text-sm text-gray-500">
+                    {t("home.lastRead")} • {t("quran.page")} {lastRead.page}
+                  </p>
+                  <h3 className="text-lg font-bold">{lastRead.surah}</h3>
                 </div>
                 <button
-                  onClick={() => router.push(`/quran/read/${lastRead.number}`)}
+                  onClick={() => router.push(`/quran/mushaf?page=${lastRead.page}`)}
                   className="rounded-xl bg-emerald-600 px-5 py-2.5 font-bold text-white hover:bg-emerald-700"
                 >
                   {t("home.continue")}

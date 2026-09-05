@@ -44,6 +44,14 @@ export default function PWAProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
+
+      // New service worker (updated build) control lete hi page refresh — stale cache kabhi nahi
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
     }
 
     // Android WebView app: Google redirect login complete karo agar pending ho

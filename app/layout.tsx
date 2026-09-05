@@ -1,9 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Amiri, Noto_Nastaliq_Urdu } from "next/font/google";
 import PWAProvider from "@/components/pwa/PWAProvider";
 import ThemeProvider from "@/providers/ThemeProvider";
 import BottomNav from "@/components/layout/BottomNav";
 import EventNotifier from "@/components/notifications/EventNotifier";
+import AssistantWidget from "@/components/ai/AssistantWidget";
+import ActivityTracker from "@/components/ai/ActivityTracker";
+import LanguageDir from "@/components/LanguageDir";
 import { I18nProvider } from "@/lib/i18n";
 import "./globals.css";
 
@@ -15,6 +18,19 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const amiri = Amiri({
+  variable: "--font-amiri",
+  subsets: ["arabic"],
+  weight: ["400", "700"],
+  display: "swap",
+});
+
+const nastaliq = Noto_Nastaliq_Urdu({
+  variable: "--font-nastaliq",
+  subsets: ["arabic"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -49,7 +65,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${amiri.variable} ${nastaliq.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>
@@ -58,10 +74,13 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <I18nProvider>
+          <LanguageDir />
           <ThemeProvider>
             <PWAProvider>{children}</PWAProvider>
             <BottomNav />
             <EventNotifier />
+            <ActivityTracker />
+            <AssistantWidget />
           </ThemeProvider>
         </I18nProvider>
       </body>

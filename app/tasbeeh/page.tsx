@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   RotateCcw,
   Save,
@@ -138,16 +138,43 @@ export default function DigitalTasbih() {
     }
   });
   const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
+  const [confirmClear, setConfirmClear] = useState<boolean>(false);
+  const [toast, setToast] = useState("");
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(""), 1800);
+  };
+
+  // Reuse ONE AudioContext — har tap par naya context banana memory leak/crash karta hai
+  const getAudioContext = () => {
+    try {
+      if (!audioCtxRef.current) {
+        const Ctor =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext;
+        if (!Ctor) return null;
+        audioCtxRef.current = new Ctor();
+      }
+      if (audioCtxRef.current.state === "suspended") {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+      return audioCtxRef.current;
+    } catch {
+      return null;
+    }
+  };
 
   // Play Sound Helper
   const playClickSound = () => {
     if (!soundEnabled) return;
     try {
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return;
-      const audioCtx = new AudioCtx();
+      const audioCtx = getAudioContext();
+      if (!audioCtx) return;
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       osc.type = "sine";
@@ -168,8 +195,12 @@ export default function DigitalTasbih() {
     setCount(newCount);
     playClickSound();
 
-    if (vibrateEnabled && navigator.vibrate) {
-      navigator.vibrate(40);
+    if (vibrateEnabled) {
+      try {
+        if (navigator.vibrate) navigator.vibrate(40);
+      } catch {
+        // vibrate unsupported
+      }
     }
   };
 
@@ -200,16 +231,27 @@ export default function DigitalTasbih() {
     setHistory(updatedHistory);
     localStorage.setItem("tasbih_history", JSON.stringify(updatedHistory));
 
-    alert(`Saved ${count} counts of ${selectedZikr.transliteration}!`);
+    showToast(`Saved ${count} counts of ${selectedZikr.transliteration}! ✓`);
   };
 
   // Clear History
   const handleClearHistory = () => {
-    if (confirm("Kya aap saari history delete karna chahte hain?")) {
-      setHistory([]);
-      localStorage.removeItem("tasbih_history");
-    }
+    setHistory([]);
+    localStorage.removeItem("tasbih_history");
+    setConfirmClear(false);
+    setShowHistoryModal(false);
+    showToast("History cleared ✓");
   };
+
+  // Cleanup AudioContext + toast timer on unmount
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      try {
+        audioCtxRef.current?.close();
+      } catch {}
+    };
+  }, []);
 
   const progressPercentage = Math.min((count / target) * 100, 100);
 
@@ -382,13 +424,46 @@ export default function DigitalTasbih() {
 
             {history.length > 0 && (
               <button
-                onClick={handleClearHistory}
+                onClick={() => setConfirmClear(true)}
                 className="w-full py-2.5 rounded-xl bg-red-950/40 border border-red-800/40 text-red-300 text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-red-900/40 transition"
               >
                 <Trash2 size={14} /> Clear All History
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Clear confirmation modal */}
+      {confirmClear && (
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-red-800/60 rounded-3xl p-6 w-full max-w-sm text-center space-y-4">
+            <div className="text-4xl">🗑️</div>
+            <h3 className="text-lg font-bold text-red-300">
+              Kya aap saari history delete karna chahte hain?
+            </h3>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmClear(false)}
+                className="flex-1 py-3 rounded-2xl bg-slate-800 text-emerald-200 text-sm font-semibold hover:bg-slate-700 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClearHistory}
+                className="flex-1 py-3 rounded-2xl bg-red-700 text-white text-sm font-bold hover:bg-red-600 transition"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className="pointer-events-none fixed bottom-24 left-1/2 z-[70] -translate-x-1/2 rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-2xl">
+          {toast}
         </div>
       )}
     </main>

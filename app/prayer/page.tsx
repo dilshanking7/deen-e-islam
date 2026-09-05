@@ -16,9 +16,10 @@ import {
   type PrayerDay,
   type PrayerTimings,
 } from "@/lib/prayer-api";
-import { getPlaceName } from "@/lib/geo";
+import { getPlaceName, getLocationByIP } from "@/lib/geo";
 import ThemeControls from "@/components/ui/ThemeControls";
 import DownloadButton from "@/components/pwa/DownloadButton";
+import { useI18n } from "@/lib/i18n";
 
 function useCountdown(target: Date | null) {
   const [now, setNow] = useState(() => new Date());
@@ -38,6 +39,7 @@ function useCountdown(target: Date | null) {
 
 export default function PrayerPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [now, setNow] = useState(() => new Date());
   const [data, setData] = useState<PrayerDay | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,6 +73,41 @@ export default function PrayerPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const firedRef = useRef<Record<string, string>>({});
   const watchIdRef = useRef<number | null>(null);
+  const ipTriedRef = useRef(false);
+  const lastAppliedRef = useRef<{ lat: number; lng: number; at: number } | null>(null);
+
+  function meaningfulMove(lat: number, lng: number): boolean {
+    const last = lastAppliedRef.current;
+    if (!last) return true;
+    const R = 6371000;
+    const dLat = ((lat - last.lat) * Math.PI) / 180;
+    const dLng = ((lng - last.lng) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((last.lat * Math.PI) / 180) *
+        Math.cos((lat * Math.PI) / 180) *
+        Math.sin(dLng / 2) ** 2;
+    const meters = 2 * R * Math.asin(Math.sqrt(a));
+    return meters > 500 || Date.now() - last.at > 180000;
+  }
+
+  async function tryIpFallback() {
+    if (ipTriedRef.current) return;
+    ipTriedRef.current = true;
+    try {
+      setError("Geolocation mila nahi — IP ke zariye location dhoondh rahe hain...");
+      const geo = await getLocationByIP();
+      if (geo) {
+        await applyPlace(geo.latitude, geo.longitude);
+        setLocationName(geo.label || savedArea || "Your location");
+        setError("");
+      } else {
+        setError("Location mil nahi payi. Saved city times dikha rahe hain.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -78,15 +115,18 @@ export default function PrayerPage() {
   }, []);
 
   // Saved area (onboarding se) — jab geolocation nahi mile to yehi dikhega
-  const savedArea = useMemo(() => {
+  function getSavedArea(): string {
     if (typeof window === "undefined") return "";
     const c = localStorage.getItem("city") || "";
     const s = localStorage.getItem("state") || "";
     const p = localStorage.getItem("pincode") || "";
     return [c, s, p].filter(Boolean).join(", ");
-  }, [locationName]);
+  }
+  const savedArea = getSavedArea();
 
   async function applyPlace(lat: number, lng: number) {
+    if (!meaningfulMove(lat, lng)) return;
+    lastAppliedRef.current = { lat, lng, at: Date.now() };
     localStorage.setItem("lat", String(lat));
     localStorage.setItem("lng", String(lng));
     setCoords({ lat, lng });
@@ -131,7 +171,9 @@ export default function PrayerPage() {
       (pos) => {
         applyPlace(pos.coords.latitude, pos.coords.longitude);
       },
-      () => {},
+      () => {
+        tryIpFallback();
+      },
       { enableHighAccuracy: true, timeout: 10000 }
     );
     watchIdRef.current = navigator.geolocation.watchPosition(
@@ -168,11 +210,12 @@ export default function PrayerPage() {
         setLoading(false);
       },
       (err) => {
-        setLoading(false);
         if (err.code === err.PERMISSION_DENIED) {
           setError("Location permission deny hai. Settings se allow karein — isse aapke sehar ke exact namaz ke auqat milenge.");
+          tryIpFallback();
         } else {
           setError("Location mil nahi payi. Saved city times dikha rahe hain.");
+          tryIpFallback();
         }
       },
       { enableHighAccuracy: true, timeout: 10000 }
@@ -202,6 +245,54 @@ export default function PrayerPage() {
     });
   }, [data]);
 
+  interface RangeInfo {
+    key: string;
+    name: string;
+    arabic: string;
+    icon: string;
+    start: Date;
+    end: Date;
+    startLabel: string;
+    endLabel: string;
+  }
+
+  const ranges = useMemo<RangeInfo[]>(() => {
+    if (!timings) return [];
+    const byKey = (k: string) => timings.find((t) => t.key === k);
+    const fajr = byKey("Fajr");
+    const sunrise = byKey("Sunrise");
+    const dhuhr = byKey("Dhuhr");
+    const asr = byKey("Asr");
+    const maghrib = byKey("Maghrib");
+    const isha = byKey("Isha");
+    if (!fajr || !sunrise || !dhuhr || !asr || !maghrib || !isha) return [];
+
+    const ishaEnd = new Date(fajr.date);
+    ishaEnd.setDate(ishaEnd.getDate() + 1);
+
+    const label = (d: Date) => formatPrayerTime(`${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`);
+
+    const windows: RangeInfo[] = [
+      { key: "Fajr", name: fajr.name, arabic: fajr.arabic, icon: fajr.icon, start: fajr.date, end: sunrise.date, startLabel: fajr.time, endLabel: label(sunrise.date) },
+      { key: "Dhuhr", name: dhuhr.name, arabic: dhuhr.arabic, icon: dhuhr.icon, start: dhuhr.date, end: asr.date, startLabel: dhuhr.time, endLabel: label(asr.date) },
+      { key: "Asr", name: asr.name, arabic: asr.arabic, icon: asr.icon, start: asr.date, end: maghrib.date, startLabel: asr.time, endLabel: label(maghrib.date) },
+      { key: "Maghrib", name: maghrib.name, arabic: maghrib.arabic, icon: maghrib.icon, start: maghrib.date, end: isha.date, startLabel: maghrib.time, endLabel: label(isha.date) },
+      { key: "Isha", name: isha.name, arabic: isha.arabic, icon: isha.icon, start: isha.date, end: ishaEnd, startLabel: isha.time, endLabel: label(ishaEnd) },
+    ];
+
+    return windows.map((w) => ({
+      ...w,
+      startLabel: formatPrayerTime(`${w.start.getHours()}:${String(w.start.getMinutes()).padStart(2, "0")}`),
+    }));
+  }, [timings]);
+
+  const rangeFor = (key: string) => ranges.find((r) => r.key === key);
+
+  const currentWindow = useMemo(() => {
+    const m = now.getTime();
+    return ranges.find((r) => r.start.getTime() <= m && m < r.end.getTime()) || null;
+  }, [ranges, now]);
+
   const nextPrayer = useMemo(() => {
     if (!timings) return null;
     const nowMs = now.getTime();
@@ -226,7 +317,7 @@ export default function PrayerPage() {
       const prayerStr = `${todayStr}:${t.key}`;
       if (firedRef.current[t.key] === prayerStr) continue;
       const diff = t.date.getTime() - now.getTime();
-      if (diff > 0 && diff <= 20000) {
+      if (diff <= 60000 && diff > -20000) {
         firedRef.current[t.key] = prayerStr;
         if (soundOn) {
           if (audioRef.current) audioRef.current.pause();
@@ -243,6 +334,38 @@ export default function PrayerPage() {
       }
     }
   }, [timings, now, alarms, soundOn]);
+
+  async function schedulePrayerNotifications() {
+    try {
+      const reg = await navigator.serviceWorker?.ready;
+      if (!reg) return;
+      const supportsTrigger =
+        "showTrigger" in Notification.prototype && !!(window as unknown as { NotificationTrigger?: unknown }).NotificationTrigger;
+      if (!supportsTrigger) return;
+      const Trigger = (window as unknown as { NotificationTrigger: new (o: { timestamp: number }) => unknown }).NotificationTrigger;
+      for (const t of timings || []) {
+        if (t.key === "Sunrise" || !alarms[t.key]) continue;
+        const trigger = new Trigger({ timestamp: t.date.getTime() - 60000 });
+        void reg.showNotification(`${t.name} ka waqt aa gaya 🕌`, {
+          body: `${t.name} (${t.arabic}) namaz ka waqt ho gaya hai.`,
+          icon: "/logo-icon.png",
+          tag: `prayer-${t.key}-${t.date.toDateString()}`,
+          showTrigger: trigger,
+        } as NotificationOptions);
+      }
+    } catch {}
+  }
+
+  useEffect(() => {
+    if (!timings) return;
+    const todayStr = now.toDateString();
+    const key = `islaam-notify-${todayStr}`;
+    if (!sessionStorage.getItem(key)) {
+      sessionStorage.setItem(key, "1");
+      schedulePrayerNotifications();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timings]);
 
   function requestNotify() {
     if ("Notification" in window && Notification.permission === "default") {
@@ -295,7 +418,7 @@ export default function PrayerPage() {
               className="h-11 w-11 object-contain"
             />
             <div>
-              <h1 className="text-2xl font-extrabold text-emerald-800">Prayer Times</h1>
+              <h1 className="text-2xl font-extrabold text-emerald-800">{t("prayer.title")}</h1>
               <p className="text-xs text-gray-500">
                 {data?.hijri?.date || ""} • {data?.hijri?.month || ""} {data?.hijri?.year || ""} AH
               </p>
@@ -309,7 +432,7 @@ export default function PrayerPage() {
               onClick={() => router.push("/home")}
               className="rounded-2xl bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow ring-1 ring-emerald-100 transition hover:bg-emerald-50"
             >
-              ← Back
+              {t("prayer.back")}
             </button>
           </div>
         </div>
@@ -326,7 +449,7 @@ export default function PrayerPage() {
               </p>
               {savedArea && locationName !== savedArea && (
                 <p className="mt-0.5 text-[11px] font-semibold text-emerald-600">
-                  📍 Aapka area: {savedArea}
+                  📍 {t("prayer.yourArea")}: {savedArea}
                 </p>
               )}
             </div>
@@ -335,13 +458,13 @@ export default function PrayerPage() {
             onClick={locateMe}
             className="flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800"
           >
-            <RefreshCw className="h-4 w-4" /> Live Location
+            <RefreshCw className="h-4 w-4" /> {t("prayer.liveLocation")}
           </button>
         </div>
 
         {/* Calculation method */}
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <label className="text-sm font-semibold text-gray-600">Calculation Method:</label>
+          <label className="text-sm font-semibold text-gray-600">{t("prayer.calcMethod")}</label>
           <select
             value={method}
             onChange={(e) => {
@@ -378,11 +501,19 @@ export default function PrayerPage() {
 
             <div className="mt-6 flex flex-wrap items-center justify-between gap-6">
               <div>
-                <p className="text-emerald-200">Agli Namaz (Next Prayer)</p>
+                <p className="text-emerald-200">{t("prayer.nextPrayer")}</p>
                 <h2 className="mt-2 text-5xl font-extrabold">{nextPrayer.name}</h2>
                 <p className="mt-2 text-lg text-emerald-100">
                   {nextPrayer.arabic} • {nextPrayer.time}
                 </p>
+                {rangeFor(nextPrayer.key) && (
+                  <p className="mt-1 text-sm font-semibold text-yellow-200">
+                    {t("prayer.rangeTo", {
+                      from: rangeFor(nextPrayer.key)!.startLabel,
+                      to: rangeFor(nextPrayer.key)!.endLabel,
+                    })}
+                  </p>
+                )}
               </div>
 
               <motion.div
@@ -390,18 +521,29 @@ export default function PrayerPage() {
                 transition={{ repeat: Infinity, duration: 2 }}
                 className="rounded-3xl bg-white/15 px-8 py-6 text-center backdrop-blur"
               >
-                <p className="text-sm text-emerald-100">Time Remaining</p>
+                <p className="text-sm text-emerald-100">{t("prayer.timeRemaining")}</p>
                 <h3 className="mt-2 text-4xl font-extrabold tracking-wide">
                   {String(countdown.h).padStart(2, "0")} : {String(countdown.m).padStart(2, "0")} :{" "}
                   {String(countdown.s).padStart(2, "0")}
                 </h3>
                 {alarms[nextPrayer.key] && (
                   <p className="mt-2 flex items-center justify-center gap-1 text-xs font-semibold text-yellow-200">
-                    <BellRing className="h-3.5 w-3.5" /> Azan alarm ON hai
+                    <BellRing className="h-3.5 w-3.5" /> {t("prayer.azanAlarmOn")}
                   </p>
                 )}
               </motion.div>
             </div>
+
+            {currentWindow && (
+              <div className="mt-6 rounded-2xl bg-white/10 px-5 py-3 text-sm text-emerald-50 backdrop-blur">
+                {t("prayer.windowActive", { name: currentWindow.name })} {currentWindow.startLabel}{" "}
+                {t("prayer.till")} {currentWindow.endLabel} —
+                {(() => {
+                  const mins = Math.max(0, Math.floor((currentWindow.end.getTime() - now.getTime()) / 60000));
+                  return mins > 0 ? ` ${t("prayer.remainingShort", { m: mins })}` : "";
+                })()}
+              </div>
+            )}
 
             <div className="mt-8 h-2 rounded-full bg-white/15">
               <motion.div
@@ -422,10 +564,8 @@ export default function PrayerPage() {
               <VolumeX className="h-5 w-5 text-gray-400" />
             )}
             <div>
-              <p className="font-semibold text-gray-800">Azan / Alarm Sound</p>
-              <p className="text-xs text-gray-400">
-                Jab namaz ka waqt ho to azan baj jayega aur notification milega
-              </p>
+              <p className="font-semibold text-gray-800">{t("prayer.azanSound")}</p>
+              <p className="text-xs text-gray-400">{t("prayer.azanSoundDesc")}</p>
             </div>
           </div>
           <button
@@ -436,9 +576,19 @@ export default function PrayerPage() {
                 : "bg-gray-200 text-gray-500 hover:bg-gray-300"
             }`}
           >
-            {soundOn ? "ON" : "OFF"}
+            {soundOn ? t("prayer.on") : t("prayer.off")}
           </button>
         </div>
+
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="mt-3 flex items-center gap-2 px-2 text-xs text-gray-500"
+        >
+          <BellRing className="h-3.5 w-3.5 text-emerald-600" />
+          {t("prayer.notifyScheduled")}
+        </motion.p>
 
         {/* All Prayers with alarm toggles */}
         <div className="mt-6 space-y-4">
@@ -469,8 +619,16 @@ export default function PrayerPage() {
                     </h3>
                     <p className={`text-xs ${isNext ? "text-emerald-100" : "text-gray-400"}`}>
                       {prayer.arabic}
-                      {isPast ? " • done" : ""}
+                      {isPast ? ` • ${t("prayer.done")}` : ""}
                     </p>
+                    {rangeFor(prayer.key) && (
+                      <p className={`mt-0.5 text-xs font-semibold ${isNext ? "text-yellow-200" : "text-emerald-700"}`}>
+                        {t("prayer.rangeTo", {
+                          from: rangeFor(prayer.key)!.startLabel,
+                          to: rangeFor(prayer.key)!.endLabel,
+                        })}
+                      </p>
+                    )}
                   </div>
                 </div>
 

@@ -9,7 +9,11 @@ import { SURAH_PAGE_MAP } from "@/lib/surah-page-map";
 
 export default function QuranSearchPage() {
   const router = useRouter();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => {
+    if (typeof window === "undefined") return "";
+    const q = new URLSearchParams(window.location.search).get("q");
+    return q ? decodeURIComponent(q) : "";
+  });
   const [surahs, setSurahs] = useState<SurahMeta[]>([]);
   const [loading, setLoading] = useState(true);
 

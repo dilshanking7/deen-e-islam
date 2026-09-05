@@ -1,8 +1,8 @@
 "use client";
 
 import { auth } from "@/lib/firebase";
-import { updateUserProfile } from "@/lib/firestore";
-import { useState } from "react";
+import { getUserProfile, updateUserProfile } from "@/lib/firestore";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useI18n, STORAGE_KEY } from "@/lib/i18n";
@@ -14,34 +14,50 @@ export default function LanguagePage() {
   const [selected, setSelected] = useState(lang);
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [isOnboarding, setIsOnboarding] = useState(false);
+
+  useEffect(() => {
+    async function checkUser() {
+      const user = auth.currentUser;
+      if (!user) {
+        setIsOnboarding(true);
+        return;
+      }
+      try {
+        const profile = await getUserProfile(user.uid);
+        setIsOnboarding(!profile?.completedOnboarding);
+      } catch {
+        setIsOnboarding(true);
+      }
+    }
+    checkUser();
+  }, []);
 
   const handleContinue = async () => {
+    localStorage.setItem(STORAGE_KEY, selected);
+    setLang(selected);
+    setSaved(true);
+
     const user = auth.currentUser;
 
     if (!user) {
-      localStorage.setItem(STORAGE_KEY, selected);
-      setLang(selected);
-      router.push("/login");
+      setTimeout(() => router.push("/login"), 700);
       return;
     }
 
     try {
       setLoading(true);
-
-      await updateUserProfile(user.uid, {
-        language: selected,
-      });
-
-      localStorage.setItem(STORAGE_KEY, selected);
-      setLang(selected);
-      setSaved(true);
-
-      setTimeout(() => router.push("/country"), 600);
+      await updateUserProfile(user.uid, { language: selected });
     } catch (error) {
       console.error(error);
-      alert("Failed to save language.");
-      setLoading(false);
     }
+
+    setLoading(false);
+
+    setTimeout(
+      () => router.push(isOnboarding ? "/country" : "/setting"),
+      700
+    );
   };
 
   return (
@@ -115,8 +131,21 @@ export default function LanguagePage() {
           disabled={loading}
           className="mt-8 w-full rounded-2xl bg-emerald-700 py-4 text-lg font-bold text-white hover:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? t("language.saving") : t("language.continue")}
+          {loading
+            ? t("language.saving")
+            : isOnboarding
+              ? t("language.continue")
+              : t("profile.save")}
         </motion.button>
+
+        {!isOnboarding && (
+          <button
+            onClick={() => router.push("/setting")}
+            className="mt-4 w-full text-center text-sm font-semibold text-gray-400 transition hover:text-emerald-700"
+          >
+            {t("common.back")}
+          </button>
+        )}
       </motion.div>
     </main>
   );

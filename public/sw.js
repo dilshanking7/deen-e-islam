@@ -1,5 +1,4 @@
-const CACHE = "islaam-e-deen-v2";
-
+const CACHE = "islaam-e-deen-v3";
 const CORE_ASSETS = [
   "/",
   "/home",
@@ -14,13 +13,15 @@ const CORE_ASSETS = [
   "/hadith",
   "/books",
   "/history",
-  "/privacy-policy",
   "/community",
+  "/assistant",
+  "/library",
   "/manifest.webmanifest",
   "/logo.png",
   "/logo-icon.png",
   "/icon-192.png",
-  "/icon-512.png"
+  "/icon-512.png",
+  "/pdf.worker.min.mjs"
 ];
 
 self.addEventListener("install", (event) => {
@@ -50,6 +51,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
+  // Navigations: always try network first, fall back to cache (never stale HTML)
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
@@ -65,6 +67,23 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Static JS/CSS (content-hashed): network first so fresh builds are always served
+  if (url.pathname.startsWith("/_next/static/")) {
+    event.respondWith(
+      fetch(request)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((cache) => cache.put(request, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // Everything else: stale-while-revalidate
   event.respondWith(
     caches.match(request).then((cached) => {
       const network = fetch(request)
@@ -81,8 +100,24 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
+// Open prayer page when a prayer notification is tapped
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      for (const win of windows) {
+        if (win.url.includes("/prayer")) return win.focus().then(() => win.navigate("/prayer"));
+      }
+      return self.clients.openWindow("/prayer");
+    })
+  );
+});
+
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();
+  }
+  if (event.data && event.data.type === "SKIP_CACHE") {
+    caches.delete(CACHE);
   }
 });

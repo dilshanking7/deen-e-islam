@@ -27,6 +27,11 @@ export default function BookReaderPage() {
 
   const book = getBook(String(params.slug));
 
+  const pdfEntry = useMemo(
+    () => (book?.pdf ? getPdfByFile(book.pdf) : undefined),
+    [book]
+  );
+
   const [chapterId, setChapterId] = useState(() => {
     if (typeof window === "undefined" || !book) return "";
     const saved = localStorage.getItem(`book-last-${book.slug}`);
@@ -40,8 +45,9 @@ export default function BookReaderPage() {
     const params = new URLSearchParams(window.location.search);
     const chapter = params.get("chapter");
     if (chapter && book.chapters.some((c) => c.id === chapter)) {
-      setChapterId(chapter);
+      const t = setTimeout(() => setChapterId(chapter), 0);
       window.history.replaceState({}, "", `/books/${book.slug}`);
+      return () => clearTimeout(t);
     }
   }, [book]);
   const [search, setSearch] = useState("");
@@ -140,9 +146,9 @@ export default function BookReaderPage() {
           <h2 className="mt-1 text-lg font-semibold text-white/90">{book.titleEn}</h2>
           <p className="mt-1 text-sm text-white/80">{book.authorEn}</p>
           <p className="mt-3 text-sm leading-6 text-white/85">{book.descriptionEn}</p>
-          {book.pdf && getPdfByFile(book.pdf) && (
+          {pdfEntry && (
             <button
-              onClick={() => router.push(`/pdf/${getPdfByFile(book.pdf)!.id}`)}
+              onClick={() => router.push(`/pdf/${pdfEntry.id}`)}
               className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-emerald-800 shadow-lg transition hover:bg-emerald-50"
             >
               <FileText size={16} />

@@ -4,15 +4,48 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Bell, Globe, Moon, User, Shield, Info, ChevronRight } from "lucide-react";
+import {
+  Bell,
+  Globe,
+  Moon,
+  Type,
+  User,
+  Shield,
+  Info,
+  ChevronRight,
+} from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { getUserProfile } from "@/lib/firestore";
 import { logoutUser } from "@/lib/auth";
+import { useTheme } from "@/providers/ThemeProvider";
+import {
+  FONT_STYLES,
+  FONT_STYLE_KEY,
+  TEXT_SIZE_KEY,
+  type FontStyleKey,
+} from "@/components/LanguageDir";
 
 export default function SettingPage() {
   const router = useRouter();
+  const { theme, toggleTheme } = useTheme();
 
   const [userData, setUserData] = useState<{ fullName?: string; email?: string }>({});
+  const [fontStyle, setFontStyle] = useState<FontStyleKey>("nastaliq");
+  const [textSize, setTextSize] = useState("normal");
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const stored = localStorage.getItem(FONT_STYLE_KEY);
+      if (FONT_STYLES.some((f) => f.key === stored)) {
+        setFontStyle(stored as FontStyleKey);
+      }
+      const ts = localStorage.getItem(TEXT_SIZE_KEY);
+      if (["normal", "large", "xlarge"].includes(ts || "")) {
+        setTextSize(ts as string);
+      }
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -58,6 +91,33 @@ export default function SettingPage() {
           icon: Moon,
           label: "Dark Mode",
           desc: "Switch app appearance",
+          path: "",
+        },
+      ],
+    },
+    {
+      title: "Reading Style",
+      items: [
+        {
+          icon: Type,
+          label: "Font Style",
+          desc:
+            fontStyle === "nastaliq"
+              ? "Urdu Nastaliq — asaan, khubsurat"
+              : fontStyle === "naskh"
+                ? "Arabic Naskh — saf, kitabi"
+                : "System font — phone ka apna style",
+          path: "",
+        },
+        {
+          icon: Type,
+          label: "Text Size",
+          desc:
+            textSize === "normal"
+              ? "Normal size"
+              : textSize === "large"
+                ? "Bara — aasaan padhai"
+                : "Sabse bara — bohat aasaan padhai",
           path: "",
         },
       ],
@@ -144,7 +204,20 @@ export default function SettingPage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 + gi * 0.1 + index * 0.05 }}
                   whileTap={{ scale: 0.99 }}
-                  onClick={() => item.path && router.push(item.path)}
+                  onClick={() => {
+                    if (item.label === "Dark Mode") toggleTheme();
+                    else if (item.label === "Font Style") {
+                      const idx = FONT_STYLES.findIndex((f) => f.key === fontStyle);
+                      const next = FONT_STYLES[(idx + 1) % FONT_STYLES.length].key;
+                      setFontStyle(next);
+                      localStorage.setItem(FONT_STYLE_KEY, next);
+                    } else if (item.label === "Text Size") {
+                      const sizes = ["normal", "large", "xlarge"];
+                      const next = sizes[(sizes.indexOf(textSize) + 1) % sizes.length];
+                      setTextSize(next);
+                      localStorage.setItem(TEXT_SIZE_KEY, next);
+                    } else if (item.path) router.push(item.path);
+                  }}
                   className={`flex w-full items-center gap-4 p-5 text-left transition hover:bg-emerald-50/50 ${
                     index !== 0 ? "border-t border-gray-100" : ""
                   }`}
@@ -154,11 +227,45 @@ export default function SettingPage() {
                   </div>
 
                   <div className="flex-1">
-                    <h4 className="font-bold text-gray-800">{item.label}</h4>
-                    <p className="text-sm text-gray-400">{item.desc}</p>
+                    <h4 className="font-bold text-gray-800">
+                      {item.label === "Dark Mode" ? (theme === "dark" ? "🌙 Dark Mode" : "☀️ Light Mode") : item.label}
+                    </h4>
+                    <p className="text-sm text-gray-400">
+                      {item.label === "Dark Mode"
+                        ? theme === "dark"
+                          ? "Currently using dark theme"
+                          : "Currently using light theme"
+                        : item.desc}
+                    </p>
                   </div>
 
-                  <ChevronRight className="h-5 w-5 text-gray-300" />
+                  {item.label === "Dark Mode" ? (
+                    <div
+                      className={`relative h-7 w-12 rounded-full transition ${
+                        theme === "dark" ? "bg-emerald-600" : "bg-gray-200"
+                      }`}
+                    >
+                      <div
+                        className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all ${
+                          theme === "dark" ? "left-[22px]" : "left-0.5"
+                        }`}
+                      />
+                    </div>
+                  ) : item.label === "Font Style" ? (
+                    <span className="rounded-xl bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                      {fontStyle === "nastaliq"
+                        ? "نستعلیق"
+                        : fontStyle === "naskh"
+                          ? "نسخ"
+                          : "System"}
+                    </span>
+                  ) : item.label === "Text Size" ? (
+                    <span className="rounded-xl bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                      {textSize === "normal" ? "A" : textSize === "large" ? "A⁺" : "A⁺⁺"}
+                    </span>
+                  ) : (
+                    <ChevronRight className="h-5 w-5 text-gray-300" />
+                  )}
                 </motion.button>
               ))}
             </div>

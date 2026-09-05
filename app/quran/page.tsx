@@ -17,6 +17,8 @@ import {
   Grid3x3,
 } from "lucide-react";
 
+import { getSurahList } from "@/lib/surah-list";
+
 interface Surah {
   number: number;
   name: string;
@@ -26,6 +28,15 @@ interface Surah {
 }
 
 const POPULAR = [1, 36, 55, 67, 78, 18];
+
+const FALLBACK_SURAHS: Surah[] = [
+  { number: 1, name: "الفاتحة", englishName: "Al-Fatiha", englishNameTranslation: "The Opening", numberOfAyahs: 7 },
+  { number: 36, name: "يس", englishName: "Ya-Sin", englishNameTranslation: "Ya Sin", numberOfAyahs: 83 },
+  { number: 55, name: "الرحمن", englishName: "Ar-Rahman", englishNameTranslation: "The Beneficent", numberOfAyahs: 78 },
+  { number: 67, name: "الملك", englishName: "Al-Mulk", englishNameTranslation: "The Sovereignty", numberOfAyahs: 30 },
+  { number: 78, name: "النبإ", englishName: "An-Naba", englishNameTranslation: "The Tidings", numberOfAyahs: 40 },
+  { number: 18, name: "الكهف", englishName: "Al-Kahf", englishNameTranslation: "The Cave", numberOfAyahs: 110 },
+];
 
 export default function QuranPage() {
   const router = useRouter();
@@ -37,12 +48,11 @@ export default function QuranPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    fetch("https://api.alquran.cloud/v1/surah")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d?.data) {
+    getSurahList()
+      .then((list) => {
+        if (Array.isArray(list) && list.length) {
           setSurahs(
-            d.data.map((s: { number: number; name: string; englishName: string; englishNameTranslation: string; numberOfAyahs: number }) => ({
+            list.map((s) => ({
               number: s.number,
               name: s.name,
               englishName: s.englishName,
@@ -50,9 +60,11 @@ export default function QuranPage() {
               numberOfAyahs: s.numberOfAyahs,
             }))
           );
+        } else {
+          setSurahs(FALLBACK_SURAHS);
         }
       })
-      .catch(() => {});
+      .catch(() => setSurahs(FALLBACK_SURAHS));
   }, []);
 
   function getAudioUrl(n: number) {
@@ -88,18 +100,19 @@ export default function QuranPage() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    const el = audio;
     function onEnded() {
       setPlaying(false);
       setProgress(0);
     }
     function onTime() {
-      if (audio.duration) setProgress((audio.currentTime / audio.duration) * 100);
+      if (el.duration) setProgress((el.currentTime / el.duration) * 100);
     }
-    audio.addEventListener("ended", onEnded);
-    audio.addEventListener("timeupdate", onTime);
+    el.addEventListener("ended", onEnded);
+    el.addEventListener("timeupdate", onTime);
     return () => {
-      audio.removeEventListener("ended", onEnded);
-      audio.removeEventListener("timeupdate", onTime);
+      el.removeEventListener("ended", onEnded);
+      el.removeEventListener("timeupdate", onTime);
     };
   }, []);
 

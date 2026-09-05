@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { sendEmailVerification } from "firebase/auth";
 import { loginUser, loginWithGoogle, resetPassword } from "@/lib/auth";
 import { getUserProfile, findUserByUsername } from "@/lib/firestore";
 import { waitForAuthUser } from "@/lib/auth-state";
@@ -102,13 +101,6 @@ export default function LoginForm() {
 
       const user = await loginUser(loginEmail, password);
 
-      if (!user.emailVerified) {
-        await sendEmailVerification(user);
-        setError("Please verify your email. Verification email has been sent again.");
-        setLoading(false);
-        return;
-      }
-
       if (rememberMe) {
         localStorage.setItem("remember-email", identifier);
       } else {
@@ -129,7 +121,7 @@ export default function LoginForm() {
         }
       }, 1500);
     } catch (err: unknown) {
-      const errorCast = err as { code?: string };
+      const errorCast = err as { code?: string; message?: string };
 
       switch (errorCast.code) {
         case "auth/user-not-found":
@@ -145,7 +137,10 @@ export default function LoginForm() {
           setError("Invalid email.");
           break;
         default:
-          setError("Something went wrong. Please try again.");
+          setError(
+            "Something went wrong. Please try again." +
+              (errorCast.message ? ` (${errorCast.message})` : "")
+          );
       }
     } finally {
       setLoading(false);

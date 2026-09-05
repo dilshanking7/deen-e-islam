@@ -1,0 +1,618 @@
+#!/usr/bin/env python3
+"""
+Islaam-E-Deen — AI Assistant Trainer
+
+Ye script AI assistant ka 'knowledge base' banati hai (lib/ai-knowledge.json).
+Har topic (intent) me:
+  - keys    : trigger words/phrase (Hinglish + Urdu + Arabic + typo variants)
+  - title   : jo AI reply me sab se upar dikhega
+  - answer  : reply ka mukammal jawaab
+  - links   : app ke andar kahan le jana hai (search scope)
+
+Chalane ke liye:  python tools/train_assistant.py
+JSON khud lib/ai-knowledge.json me updated ho jaata hai.
+Bina Python ke bhi ye JSON seedha edit kar ke 'train' ho sakta hai.
+
+Fuzzy (typo) handling app ke andar JS me hoti hai:
+Levenshtein distance + token matching (lib/ai-assistant.ts).
+"""
+
+import json
+import os
+
+INTENTS = [
+    {
+        "keys": [
+            "assalamu", "salam", "السلام", "adaab", "adab", "namaste",
+            "namaskar", "hello", "hi", "hey", "kya haal", "aoa", "wslm",
+        ],
+        "title": "Wa Alaikum Assalam!",
+        "answer": (
+            "Assalamu Alaikum! Main aapka deeni saathi hoon. Main aapko Quran, "
+            "Namaz ke waqt, Wudu, Namaz ke ahkam, Roza, Zakat, Hajj aur app ki "
+            "saari features ke baare me bata sakta hoon.\n\n"
+            "Bas mujhse sawal poochiye jaise:\n"
+            "• \"Namaz ke faraiz kya hain?\"\n"
+            "• \"Wudu kaise karein?\"\n"
+            "• \"Namaz ke waqt me kahan se pata chalega?\""
+        ),
+        "links": [{"label": "Quran parhein", "path": "/quran/read"}],
+    },
+    {
+        "keys": [
+            "namaz ke waqt", "prayer time", "prayer times", "waqt", "azan",
+            "adhan", "azan ki", "auqat", "timing", "timings", "kitne baje",
+            "namaz ka waqt", "azuqat", "adzan",
+        ],
+        "title": "Namaz ke Auqaat",
+        "answer": (
+            "Namaz ke waqt aap Prayer page par dekhen. Wahan har namaz ka waqt, "
+            "agli namaz ka countdown, aur har namaz ka waqt-range mehsoos hoga. "
+            "Azan bhi apne aap baj jati hai — bas sound ON rakhen.\n\n"
+            "Aapki real location se waqt apne aap mil jate hain; agar location "
+            "na mile to IP se ya saved city se."
+        ),
+        "links": [
+            {"label": "Namaz ke waqt dekhen", "path": "/prayer"},
+            {"label": "Namaz ke faraiz parhein", "path": "/books/kaanoon-e-shariat?chapter=namaz-faraiz"},
+        ],
+    },
+    {
+        "keys": [
+            "wudu", "wuzu", "wuju", "wujoo", "vudu", "taharat", "istinja",
+            "wash", "wadhu", "wudhu", "wozu",
+        ],
+        "title": "Wudu (Wuzu)",
+        "answer": (
+            "Wudu ke faraiz: (1) Chehra dhoona, (2) Dono haath kohniyon tak "
+            "dhoona, (3) Sar ka masah karna, (4) Dono paon takhnon tak dhoona.\n\n"
+            "Pure tafseel ke liye Qanun-e-Shariyat ka Wudu chapter parhein — faraiz, "
+            "sunnat aur makroohat sab likhe hain."
+        ),
+        "links": [
+            {"label": "Wudu chapter", "path": "/books/kaanoon-e-shariat?chapter=wudu-faraiz"},
+            {"label": "Wudu ki sunnatein", "path": "/books/kaanoon-e-shariat?chapter=wudu-sunnat"},
+            {"label": "Taharah", "path": "/books/kaanoon-e-shariat?chapter=taharah"},
+        ],
+    },
+    {
+        "keys": ["ghusl", "ghail", "gushl", "gwsl", "naha", "nahana", "ghsl"],
+        "title": "Ghusl (Farz Ghusl)",
+        "answer": (
+            "Ghusl ke farz ye hain: (1) Kulli karna (moun dhona) aur naak me "
+            "pani dalna, (2) Pura jism ek baar pani se dho lena.\n\n"
+            "Puriy tafseel ke liye Ghusl chapter parhein — kaise, kab aur kya "
+            "sunnat hai sab maujood hai."
+        ),
+        "links": [{"label": "Ghusl chapter", "path": "/books/kaanoon-e-shariat?chapter=ghusl"}],
+    },
+    {
+        "keys": ["tayammum", "taiyamum", "tayamo", "khak se", "paak mitti"],
+        "title": "Tayammum",
+        "answer": (
+            "Jab pani na ho ya beemari ki wajah se pani se wudu/ghusl na ho sake, "
+            "to tayammum kiya jata hai: saaf mitti par haath maar kar chehra "
+            "masah karein, phir haath kohniyon tak masah karein.\n\n"
+            "Sahi tafseel ke liye Tayammum chapter dekhein."
+        ),
+        "links": [{"label": "Tayammum chapter", "path": "/books/kaanoon-e-shariat?chapter=tayammum"}],
+    },
+    {
+        "keys": [
+            "namaz ke faraiz", "namaz faraiz", "faraiz namaz", "faraiz",
+            "farz namaz", "namaz ka farz", "namaz fahriz", "faraiyz",
+        ],
+        "title": "Namaz ke Farz",
+        "answer": (
+            "Namaz ke faraiz: (1) Qiyam, (2) Takbeer-e-Tahrima, (3) Qirat, "
+            "(4) Ruku, (5) Sajde, (6) Aakhri qaidah me tashahhud ki miqdaar, "
+            "(7) Salam phirana.\n\n"
+            "Wajibat, sunnat aur sharaet bhi isi chapter me hain."
+        ),
+        "links": [
+            {"label": "Namaz ke faraiz", "path": "/books/kaanoon-e-shariat?chapter=namaz-faraiz"},
+            {"label": "Namaz ke wajibat", "path": "/books/kaanoon-e-shariat?chapter=namaz-wajibat"},
+            {"label": "Namaz sharaet", "path": "/books/kaanoon-e-shariat?chapter=namaz-sharaet"},
+        ],
+    },
+    {
+        "keys": ["roza", "roze", "roja", "sawm", "sehari", "iftar", "fitar", "roja rakha", "fasting"],
+        "title": "Roza (Fasting)",
+        "answer": (
+            "Rozey ke faraiz aur sunnat ki mukammal taaleem Qanun-e-Shariyat ke "
+            "Roza chapter me hai: niyat kaise, kya haram, kya makrooh, fidyah aur "
+            "qaza ke masail — sab likhe hain."
+        ),
+        "links": [
+            {"label": "Roza chapter", "path": "/books/kaanoon-e-shariat?chapter=roza"},
+            {"label": "Jannati Zevar — Roza", "path": "/books/jannati-jewar?chapter=roza"},
+        ],
+    },
+    {
+        "keys": ["zakat", "zakaat", "zakath", "zakat kya"],
+        "title": "Zakat",
+        "answer": (
+            "Zakat har us musalman par farz hai jis ke paas nisab ho. Nisab, "
+            "kaunsi cheez par, kitni aur kis ko deni hai — Zakat chapter me sab likha hai."
+        ),
+        "links": [
+            {"label": "Zakat chapter", "path": "/books/kaanoon-e-shariat?chapter=zakat"},
+            {"label": "Jannati Zevar — Zakat", "path": "/books/jannati-jewar?chapter=zakat"},
+        ],
+    },
+    {
+        "keys": ["hajj", "umrah", "hajj kaise", "umra"],
+        "title": "Hajj aur Umrah",
+        "answer": (
+            "Hajj ke aadaab aur arkan ki tafseel Jannati Zevar ke Hajj chapter me "
+            "hai. Hajj Islam ka 5wan rukun hai — farz un par jo istitah rakhte hain."
+        ),
+        "links": [
+            {"label": "Hajj chapter", "path": "/books/jannati-jewar?chapter=hajj"},
+            {"label": "Islami tareekh", "path": "/history"},
+        ],
+    },
+    {
+        "keys": ["qurbani", "qurbaani", "bakrid", "eid ul azha", "qurban", "korbani"],
+        "title": "Qurbani",
+        "answer": (
+            "Qurbani ke masail (kaunsi jaanwar, kitne hisse, kab, niyat, aur "
+            "aadaab) Qanun-e-Shariyat ke Qurbani chapter me hain."
+        ),
+        "links": [{"label": "Qurbani chapter", "path": "/books/kaanoon-e-shariat?chapter=qurbani"}],
+    },
+    {
+        "keys": ["janazah", "janaza", "janazha", "mayyat", "kafan", "dafan", "talqin", "namaz e janaza"],
+        "title": "Janazah ke Ahkam",
+        "answer": (
+            "Janazah ki Namaz aur mayyat ke ahkam (ghusal, kafan, dafan) "
+            "Qanun-e-Shariyat ke Janazah chapter me hain."
+        ),
+        "links": [{"label": "Janazah chapter", "path": "/books/kaanoon-e-shariat?chapter=janazah"}],
+    },
+    {
+        "keys": ["nikah", "shadi", "shaadi", "nikah kya", "nikah kaise", "nikha", "marriage"],
+        "title": "Nikah (Shadi)",
+        "answer": (
+            "Nikah ke sharai masail (farz, sharaet, mehr, talaq) Jannati Zevar ke "
+            "Nikah chapter me hain — auraton aur mard dono ke liye zaroori ahkam."
+        ),
+        "links": [{"label": "Nikah chapter", "path": "/books/jannati-jewar?chapter=nikah"}],
+    },
+    {
+        "keys": ["masah", "masah socks", "moza", "moze", "parcha", "masah moza"],
+        "title": "Masah (Parcha / Mozon par)",
+        "answer": (
+            "Parchay (mozay) par masah ke masail Qanun-e-Shariyat ke Masah chapter "
+            "me hain — kab jaiz hai, kitni muddat, kaise karein."
+        ),
+        "links": [{"label": "Masah chapter", "path": "/books/kaanoon-e-shariat?chapter=masah"}],
+    },
+    {
+        "keys": ["zihar", "purdah", "parde", "parda", "hayaa", "hijab"],
+        "title": "Purdah aur Zeenat",
+        "answer": (
+            "Purdah aur shariyah zeenat ke ahkam Jannati Zevar ke Purdah chapter "
+            "me hain — aurat ke liye kya farz, kya sunnat."
+        ),
+        "links": [{"label": "Purdah chapter", "path": "/books/jannati-jewar?chapter=purdah"}],
+    },
+    {
+        "keys": ["ghar ke masail", "ghar", "ghar ke", "bache", "bacho", "bachhon"],
+        "title": "Ghar ke Masail",
+        "answer": (
+            "Ghar ke aasibabaat, aakhlaq aur ghar ke masail Jannati Zevar ke Ghar "
+            "chapter me hain."
+        ),
+        "links": [{"label": "Ghar chapter", "path": "/books/jannati-jewar?chapter=ghar"}],
+    },
+    {
+        "keys": [
+            "quran", "qur'an", "quran majeed", "kuran", "qurann", "qurana",
+            "quran parho", "quran kholo", "quran padho", "quraan",
+        ],
+        "title": "Quran Majeed",
+        "answer": (
+            "Quran 30 paraon me hai. Aap mushaf style me har page misst wali "
+            "dekhne ko milegi, saath me tarjuma aur audio bhi hai.\n\n"
+            "Surah ya page number bataiye — main seedha wahan pahuncha dunga. "
+            "Jaise: \"surah yaseen\" ya \"page 15\"."
+        ),
+        "links": [
+            {"label": "Quran parhein (mushaf)", "path": "/quran/read"},
+            {"label": "Tarjuma ke saath", "path": "/quran/translation"},
+            {"label": "Rozana ayah", "path": "/quran/daily-verse"},
+        ],
+    },
+    {
+        "keys": ["surah yaseen", "yaseen", "yasin", "yaseen sharif"],
+        "title": "Surah Yaseen",
+        "answer": (
+            "Surah Yaseen Quran ka 36wan surah hai — ise Quran ka dil kaha jata "
+            "hai. Mushaf me khol kar parhein."
+        ),
+        "links": [{"label": "Surah Yaseen kholen", "path": "/quran/mushaf?page=440"}],
+    },
+    {
+        "keys": ["surah rehman", "rehman", "ar rehman", "rahman", "rehman surah"],
+        "title": "Surah Ar-Rahman",
+        "answer": (
+            "Surah Ar-Rahman 55wan surah hai — jise Quran ki dulhan kaha jata hai. "
+            "Mushaf me khol kar parhein."
+        ),
+        "links": [{"label": "Surah Ar-Rahman kholen", "path": "/quran/mushaf?page=530"}],
+    },
+    {
+        "keys": ["surah mulk", "mulk", "tabarak", "sura mulk"],
+        "title": "Surah Al-Mulk",
+        "answer": (
+            "Surah Al-Mulk 67wan surah hai. Hadith me aya ke ye surah apne parhne "
+            "wale ke liye qabr ke azaab se shifa'at karega. Mushaf me khol kar parhein."
+        ),
+        "links": [{"label": "Surah Al-Mulk kholen", "path": "/quran/mushaf?page=562"}],
+    },
+    {
+        "keys": ["hadith", "bukhari", "muslim", "tirmizi", "abu dawood", "nasi", "hadis"],
+        "title": "Hadith",
+        "answer": (
+            "Hadith section me aapko zindagi ke har pehlu par hadith milengi — "
+            "rozana parhiye aur amal kijiye."
+        ),
+        "links": [{"label": "Hadith parhein", "path": "/hadith"}],
+    },
+    {
+        "keys": ["dua", "duain", "duas", "dua masla", "masnoon dua", "duaa"],
+        "title": "Masnoon Duain",
+        "answer": (
+            "Dua section me zindagi ki zaroori duaen hain — subah se raat tak, "
+            "khane, ghar se nikalne, aur har mauqe ki duaen. Rozana parhiye."
+        ),
+        "links": [
+            {"label": "Duain dekhein", "path": "/dua"},
+        ],
+    },
+    {
+        "keys": ["naat", "naats", "naat sharif", "nat"],
+        "title": "Naat Sharif",
+        "answer": (
+            "Naat section me Naat-e-Rasool (ﷺ) aur hamd ke kalam mobassar hain — "
+            "sune aur dil me sukoon paayiye."
+        ),
+        "links": [{"label": "Naat sunein", "path": "/naat"}],
+    },
+    {
+        "keys": ["names", "asma ul husna", "99 names", "name of allah", "allah ke naam"],
+        "title": "Asma ul Husna (Allah ke Naam)",
+        "answer": (
+            "Allah ke 99 Khoobsurat Naam app me hain — har naam ke saath maani. "
+            "Dua me parhiye."
+        ),
+        "links": [{"label": "99 Names parhein", "path": "/names"}],
+    },
+    {
+        "keys": ["nabi", "anbiya", "prophet", "nabiyon", "stories", "kahanian", "kissa", "qissa"],
+        "title": "Anbiya ki Kahanian",
+        "answer": (
+            "Prophets section me 25+ anbiya (alaihimus salam) ki kahanian Hinglish "
+            "me hain — bacho se lekar badon tak ke liye asaan zuban."
+        ),
+        "links": [{"label": "Anbiya ki kahanian", "path": "/prophets"}],
+    },
+    {
+        "keys": ["history", "tareekh", "islami tareekh", "tehreek", "tarikh"],
+        "title": "Islami Tahreek",
+        "answer": (
+            "History section me Islami tareekh ke aham waqiat mobassar hain — "
+            "parhiye aur seekhiye."
+        ),
+        "links": [{"label": "History parhein", "path": "/history"}],
+    },
+    {
+        "keys": ["community", "feed", "post", "share"],
+        "title": "Community",
+        "answer": (
+            "Community feed me apna dua masla, naat, nabi ki kahani aur timeline "
+            "share karein — log pasand aur comment karte hain. Realtime sab kuch "
+            "nazar aata hai."
+        ),
+        "links": [{"label": "Community kholen", "path": "/community"}],
+    },
+    {
+        "keys": ["notification", "alarm", "remind", "yaad", "notify"],
+        "title": "Notifications aur Alarm",
+        "answer": (
+            "Aap namaz ke waqt se pehle azan ka alarm aur notification laga sakte "
+            "hain. Prayer page par jayen aur sound ON karein — notification bhi "
+            "scheduled ho jata hai."
+        ),
+        "links": [
+            {"label": "Prayer page", "path": "/prayer"},
+            {"label": "Notifications", "path": "/notifications"},
+        ],
+    },
+    {
+        "keys": ["setting", "settings", "language", "dark", "theme", "zabaan", "change language", "font", "text size"],
+        "title": "Settings, Language aur Style",
+        "answer": (
+            "Settings me aap theme (Light/Dark), language (English/Urdu/Hindi/Arabic), "
+            "font style (Nastaliq/Naskh) aur Urdu text ka size badal sakte hain — "
+            "apni padhai apne hisab se set karein."
+        ),
+        "links": [{"label": "Settings kholen", "path": "/setting"}],
+    },
+    {
+        "keys": ["library", "books", "kitab", "pdf", "qanun", "jannati", "zevar", "shariat", "kanun"],
+        "title": "Kitabein",
+        "answer": (
+            "Library me Qanun-e-Shariyat aur Jannati Zevar hain — page-by-page "
+            "mushaf style me parhein. Ye Maulana Ashraf Ali Thanwi (رحمہ اللہ) ki "
+            "kitabein hain."
+        ),
+        "links": [
+            {"label": "Library kholen", "path": "/library"},
+        ],
+    },
+    {
+        "keys": ["qibla", "qibla direction", "qibla kon", "kibla"],
+        "title": "Qibla Direction",
+        "answer": (
+            "Qibla page par aapko live compass ke zariye kaaba ka rukh milta hai. "
+            "Apne phone ko seedha pakdein — arrow kaaba ki taraf ishara karega."
+        ),
+        "links": [{"label": "Qibla kholen", "path": "/qibla"}],
+    },
+    {
+        "keys": ["tasbeeh", "zikr", "counter", "subhanallah", "alhamdulillah", "allah hu akbar"],
+        "title": "Tasbeeh Counter",
+        "answer": (
+            "Tasbeeh counter se aap SubhanAllah, Alhamdulillah aur Allahu Akbar "
+            "ka zikr gin sakte hain — tap karein, counter chalta rahega."
+        ),
+        "links": [{"label": "Tasbeeh kholen", "path": "/tasbeeh"}],
+    },
+    {
+        "keys": ["date", "islamic date", "calendar", "hijri", "tarikh aaj", "chand"],
+        "title": "Islami Date",
+        "answer": (
+            "Calendar page par aaj ki Hijri tareekh aur mahine ka view milta hai. "
+            "Aaj chand ki tareekh batane ke liye isko dekhen."
+        ),
+        "links": [{"label": "Calendar kholen", "path": "/calendar"}],
+    },
+    {
+        "keys": ["muslim", "islam", "deen", "islaam", "baat", "maloom"],
+        "title": "Islaam-E-Deen Radio",
+        "answer": (
+            "Is app me aapko milega: Quran (mushaf + tarjuma), Namaz ke waqt + "
+            "azan, 99 Names, Hadith, Masnoon Duain, Tasbeeh, Qibla, Islami Date, "
+            "Kitabein, Anbiya ki kahanian, Naat aur Community.\n\n"
+            "Kisi bhi feature ya masla ke baare me poochiye — main khol dunga."
+        ),
+        "links": [
+            {"label": "Home", "path": "/home"},
+            {"label": "Community", "path": "/community"},
+        ],
+    },
+    {
+        "keys": ["qaza namaz", "qada namaz", "qaja namaz", "chutti namaz", "namaz qaza"],
+        "title": "Qaza Namaz",
+        "answer": (
+            "Jo namaz waqt par nahi parhi gayi, uski qaza farz hai. Qaza ka "
+            "tarika waqt ki namaz jaisa hi hai — niyat me 'qaza' karein. Har "
+            "namaz apne istiqrar (mukaddar) waqt me padhne ki koshish karein, "
+            "aur jaldi se jaldi qaza puri karein.\n\n"
+            "Tafseel Qanun-e-Shariyat ke Namaz chapters me hai."
+        ),
+        "links": [
+            {"label": "Namaz ke faraiz", "path": "/books/kaanoon-e-shariat?chapter=namaz-faraiz"},
+            {"label": "Qanun-e-Shariyat", "path": "/books/kaanoon-e-shariat"},
+        ],
+    },
+    {
+        "keys": ["jummah", "juma", "jumma", "friday namaz", "jamaah"],
+        "title": "Jummah aur Jamaat",
+        "answer": (
+            "Jummah ki namaz mard ke liye farz hai (sharaet ke saath) — 2 rakat "
+            "farz. Janazah nahi, balke khutba ke baad 2 rakat. Jamaat ke saath "
+            "namaz 27 guna ziyada sawab deti hai.\n\n"
+            "Jummah aur jamaat ki puri sharaet Qanun-e-Shariyat ke chapters me "
+            "hain."
+        ),
+        "links": [
+            {"label": "Jummah chapter", "path": "/books/kaanoon-e-shariat?chapter=jummah"},
+            {"label": "Eid ki namaz", "path": "/books/kaanoon-e-shariat?chapter=eid"},
+        ],
+    },
+    {
+        "keys": ["eid namaz", "eid ki namaz", "eid padhna", "namaz eid", "eid ul fitr", "eid ul azha"],
+        "title": "Eid ki Namaz",
+        "answer": (
+            "Eid ki namaz 2 rakat wajib hai — Isha ke khilaf Eid me 6 takbeerein "
+            "ziyada hoti hain (3 extra takbeerein). Khutba namaz ke baad hota "
+            "hai. Mustahabb hai ke Eid ke din ghusl kar ke achhe kapre pahne "
+            "jaayein aur raaste alag karein.\n\n"
+            "Tafseel Qanun-e-Shariyat ke Eid chapter me hai."
+        ),
+        "links": [{"label": "Eid chapter", "path": "/books/kaanoon-e-shariat?chapter=eid"}],
+    },
+    {
+        "keys": ["taraweeh", "taraveeh", "ramzan namaz", "ramazan namaz"],
+        "title": "Taraweeh",
+        "answer": (
+            "Ramzan me Isha ke baad 20 rakat Taraweeh sunnat-e-moakkadah hai. "
+            "Jaldi ya dheere kisi bhi tareeqe se jamaat ke saath parhiye — "
+            "Ramzan ki raaton ki qayam ka salah se sabse behtar amal hai."
+        ),
+        "links": [
+            {"label": "Roza chapter", "path": "/books/kaanoon-e-shariat?chapter=roza"},
+            {"label": "Calendar dekhein", "path": "/calendar"},
+        ],
+    },
+    {
+        "keys": ["musafir namaz", "qasr", "safar namaz", "musafir", "safr"],
+        "title": "Musafir ki Namaz (Qasr)",
+        "answer": (
+            "Safar me (mukaberati itne/safre masheel ke mutabiq sharai safar me) "
+            "farz namazein 4 rakat ke bajaye 2 rakat (qasr) parhi jaati hain. "
+            "Jama (zuhar+asr, maghrib+isha mila kar) bhi jaiz hai zaroorat ke "
+            "waqt.\n\n"
+            "Sahi sharai muddat aur tafseel ke liye Qanun-e-Shariyat dekhein."
+        ),
+        "links": [
+            {"label": "Namaz sharaet", "path": "/books/kaanoon-e-shariat?chapter=namaz-sharaet"},
+            {"label": "Namaz ke faraiz", "path": "/books/kaanoon-e-shariat?chapter=namaz-faraiz"},
+        ],
+    },
+    {
+        "keys": ["fitra", "fitr", "sadaqat ul fitr", "fitra kya", "zakat e fitr"],
+        "title": "Fitra (Sadaqat-ul-Fitr)",
+        "answer": (
+            "Fitra har sahib-e-nisab musalman par Eid-ul-Fitr se pehle de dena "
+            "wajib hai — dane, ya uski qimat. Mukiri ke mutabiq fitra ki "
+            "miqdaar halqa ki qeemat par hoga.\n\n"
+            "Zakat aur fitra ke masail Qanun-e-Shariyat ke Zakat chapter me "
+            "mausoom hain."
+        ),
+        "links": [
+            {"label": "Zakat chapter", "path": "/books/kaanoon-e-shariat?chapter=zakat"},
+            {"label": "Jannati Zevar — Zakat", "path": "/books/jannati-jewar?chapter=zakat"},
+        ],
+    },
+    {
+        "keys": ["mehr", "mahr", "mehar", "jahez", "dowry"],
+        "title": "Mehr aur Jahez",
+        "answer": (
+            "Mehr shadi ka zaroori hissa hai — yeh ho to nikah sahi, na ho to "
+            "bhi raat ko. Mehr ki miqdaar munasib ho. Jahez koi farz nahi, "
+            "balke zulm hai agar zabardasti maanga jaye.\n\n"
+            "Nikah aur meer ke ahkam Jannati Zevar ke Nikah chapter me hain."
+        ),
+        "links": [
+            {"label": "Nikah chapter", "path": "/books/jannati-jewar?chapter=nikah"},
+            {"label": "Ghar ke masail", "path": "/books/jannati-jewar?chapter=ghar"},
+        ],
+    },
+    {
+        "keys": ["talaq", "talak", "khula", "talaq kya", "talaq dena"],
+        "title": "Talaq aur Khula",
+        "answer": (
+            "Talaq shariyah me ek sakht maamla hai — iddat ka takhlif aur "
+            "char mahine ka intezar. Khula me aurat de sakti hai. Ghar ke "
+            "masail aur nikah ke chapters me in ahkam ki tafseel hai."
+        ),
+        "links": [
+            {"label": "Nikah chapter", "path": "/books/jannati-jewar?chapter=nikah"},
+            {"label": "Ghar chapter", "path": "/books/jannati-jewar?chapter=ghar"},
+        ],
+    },
+    {
+        "keys": ["haiz", "haiz nifas", "maasik", "nifaas", "haidh"],
+        "title": "Haiz aur Nifas",
+        "answer": (
+            "Haiz ki halat me namaz aur roza haram (ruk jaata hai), lekin "
+            "roza baad me qaza karna hota hai, namaz ki qaza nahi. Nifas "
+            "(bachhe ke baad) ke ahkam bhi isi chapters me hain — Jannati "
+            "Zevar me auraton ke liye khass ahkam likhe hain."
+        ),
+        "links": [
+            {"label": "Haiz-Nifas chapter", "path": "/books/jannati-jewar?chapter=haiz-nifas"},
+            {"label": "Purdah chapter", "path": "/books/jannati-jewar?chapter=purdah"},
+        ],
+    },
+    {
+        "keys": ["akhlaq", "ahlak", "ikhlak", "hush e sulook", "haqooq", "baap maa", "maa baap"],
+        "title": "Akhlaq aur Haqooq",
+        "answer": (
+            "Achhe akhlaq Islam ka ahem hissa hai — maa-baap ke haqooq, "
+            "rishtedari, aur logon ke saath hush e sulook. Jannati Zevar ke "
+            "Akhlaq chapter me iski tafseel hai."
+        ),
+        "links": [
+            {"label": "Akhlaq chapter", "path": "/books/jannati-jewar?chapter=akhlaq"},
+            {"label": "Ghar ke masail", "path": "/books/jannati-jewar?chapter=ghar"},
+        ],
+    },
+    {
+        "keys": ["akida", "aqeedah", "iman", "eimaaan", "tawheed", "shirk", "bidaat"],
+        "title": "Aqeedah aur Imaan",
+        "answer": (
+            "Imaan ka matlab hai Allah par, Rasool (ﷺ) par, Qayamat par, "
+            "farishton par, asmaani kitabon par aur taqdir par yakeen. "
+            "Tawheed sab se ahem hai — shirk se bachna har musalman par "
+            "farz. Isi khaas baat ko quran-o-hadith me bohat samjhaaya gaya."
+        ),
+        "links": [
+            {"label": "Quran padhein", "path": "/quran/read"},
+            {"label": "99 Names", "path": "/names"},
+        ],
+    },
+    {
+        "keys": ["surah kahf", "kahf", "kehf"],
+        "title": "Surah Al-Kahf",
+        "answer": (
+            "Surah Al-Kahf (18wan surah) — jummah ke din parhne ki hadith me "
+            "taahooshi hai. Mushaf me khol kar misst parhein."
+        ),
+        "links": [{"label": "Surah Kahf kholen", "path": "/quran/mushaf?page=293"}],
+    },
+]
+
+FALLBACK = {
+    "title": "Samajh gaya — aur detail chahiye?",
+    "answer": (
+        "Mujhe is sawal ka mukammal jawaab nahi mila. Aap zaroor poochh sakte "
+        "hain, aur main neeche ke pages par le jaunga jo is masle me madad "
+        "karenge.\n\n"
+        "Koshish karein: wudu, namaz ke waqt, roza, zakat, qibla, quran page, "
+        "ya \"surah yaseen\"."
+    ),
+    "links": [
+        {"label": "Namaz ke waqt", "path": "/prayer"},
+        {"label": "Quran", "path": "/quran/read"},
+        {"label": "Community me poochhein", "path": "/community"},
+    ],
+}
+
+QUICK_QUESTIONS = [
+    "Namaz ke waqt kya hain?",
+    "Namaz ke faraiz kya hain?",
+    "Wudu kaise karein?",
+    "Roza ke masail kya hain?",
+    "Zakat kya hai?",
+    "Surah Yaseen kholo",
+    "Qibla direction",
+    "Kitabein kaise parhne hain?",
+]
+
+META = {
+    "version": 3,
+    "trained_with": "tools/train_assistant.py (Python 3)",
+    "note": "Is file ko Python script generate karti hai. Manual edit bhi allowed hai — script se over-write se pehle backup rahega.",
+}
+
+
+def main() -> None:
+    here = os.path.dirname(os.path.abspath(__file__))
+    out_path = os.path.join(here, "..", "lib", "ai-knowledge.json")
+    out_path = os.path.normpath(out_path)
+
+    if os.path.exists(out_path):
+        with open(out_path, "r", encoding="utf-8") as f:
+            backup = json.load(f)
+        with open(out_path + ".bak", "w", encoding="utf-8") as f:
+            json.dump(backup, f, ensure_ascii=False, indent=2)
+
+    data = {
+        "meta": META,
+        "intents": INTENTS,
+        "fallback": FALLBACK,
+        "quick_questions": QUICK_QUESTIONS,
+    }
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    print("[OK] Trainer ran. {0} intents -> {1}".format(len(INTENTS), out_path))
+
+
+if __name__ == "__main__":
+    main()

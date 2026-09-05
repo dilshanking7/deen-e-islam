@@ -26,6 +26,39 @@ body {
   transition: background-color 0.4s ease, color 0.4s ease;
 }
 
+/* RTL / Urdu / Arabic text: default readable nastaliq + naskh fallbacks */
+[dir="rtl"] {
+  font-family: var(--font-nastaliq), "Noto Naskh Arabic", "Segoe UI", Tahoma, Arial, sans-serif;
+  letter-spacing: 0;
+  word-spacing: 1px;
+  line-height: 1.8;
+}
+
+.arabic-text,
+[lang="ar"] {
+  font-family: var(--font-amiri), "Noto Naskh Arabic", "Scheherazade New", serif;
+  line-height: 2;
+}
+
+/* User font style choices (applied via documentElement data attribute) */
+html[data-font="nastaliq"] [dir="rtl"] {
+  font-family: var(--font-nastaliq), "Noto Naskh Arabic", sans-serif;
+}
+html[data-font="naskh"] [dir="rtl"] {
+  font-family: var(--font-amiri), "Noto Naskh Arabic", "Scheherazade New", serif;
+}
+html[data-font="system"] [dir="rtl"] {
+  font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+}
+
+/* Larger (more readable) RTL text */
+html[data-textsize="large"] [dir="rtl"] {
+  font-size: 112%;
+}
+html[data-textsize="xlarge"] [dir="rtl"] {
+  font-size: 125%;
+}
+
 input[type="range"] {
   cursor: pointer;
 }
@@ -40,4 +73,25 @@ input[type="range"] {
 ::-webkit-scrollbar-thumb {
   background: rgba(6, 95, 70, 0.35);
   border-radius: 8px;
+}
+
+@keyframes islaam-spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: islaam-spin-slow 3.2s linear infinite;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
