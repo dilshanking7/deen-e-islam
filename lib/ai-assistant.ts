@@ -220,14 +220,23 @@ function applyRepeatNote(answer: AiAnswer, topic: string): AiAnswer {
 }
 
 // ---------------- Free AI (Hugging Face) — kisi bhi sawal ka jawab ----------------
+export interface AiHistoryItem {
+  role: "user" | "ai";
+  text: string;
+}
+
 export async function queryHuggingFace(
-  question: string
+  question: string,
+  history: AiHistoryItem[] = []
 ): Promise<{ text: string; model: string } | null> {
   try {
     const res = await fetch("/api/ai", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({
+        question,
+        history: history.map((m) => ({ role: m.role, content: m.text })),
+      }),
       signal: AbortSignal.timeout(45000),
     });
     if (!res.ok) return null;
@@ -239,7 +248,7 @@ export async function queryHuggingFace(
   }
 }
 // ---------------- Async smart answer (Quran + web + local) --------------
-export async function getAiAnswerAsync(rawQuery: string): Promise<AiAnswer> {
+export async function getAiAnswerAsync(rawQuery: string, history: AiHistoryItem[] = []): Promise<AiAnswer> {
   const q = normalize(rawQuery);
   if (!q) {
     return {
@@ -302,7 +311,7 @@ export async function getAiAnswerAsync(rawQuery: string): Promise<AiAnswer> {
   }
 
   // 3.5) Free AI (Hugging Face) - kisi bhi sawal ka jawab
-  const hf = await queryHuggingFace(rawQuery);
+  const hf = await queryHuggingFace(rawQuery, history);
   if (hf) {
     return {
       title: "Deeni Assistant (AI)",

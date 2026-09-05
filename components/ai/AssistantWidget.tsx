@@ -75,7 +75,7 @@ export default function AssistantWidget() {
     trackActivity("assistant_ask");
 
     localStorage.setItem("islaam-ai-name", userName);
-    getAiAnswerAsync(q)
+    getAiAnswerAsync(q, messages.map((m) => ({ role: m.role, text: m.text })).slice(-8))
       .then((answer) => {
         setMessages((prev) => [...prev, { role: "ai", text: answer.answer, answer }]);
       })
