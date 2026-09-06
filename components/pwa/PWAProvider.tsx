@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { completeGoogleRedirect } from "@/lib/auth";
-import { getUserProfile } from "@/lib/firestore";
+import { getUserProfile, isOnboardingComplete } from "@/lib/firestore";
 import { auth } from "@/lib/firebase";
 
 interface PWAContextValue {
@@ -59,7 +59,7 @@ export default function PWAProvider({ children }: { children: ReactNode }) {
       .then(async (loggedIn) => {
         if (!loggedIn) return;
         const profile = await getUserProfile(auth.currentUser?.uid ?? "");
-        if (profile?.completedOnboarding) {
+        if (isOnboardingComplete(profile)) {
           window.location.href = "/home";
         } else {
           window.location.href = "/welcome";

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { loginUser, loginWithGoogle, resetPassword } from "@/lib/auth";
-import { getUserProfile, findUserByUsername } from "@/lib/firestore";
+import { getUserProfile, findUserByUsername, isOnboardingComplete } from "@/lib/firestore";
 import { waitForAuthUser } from "@/lib/auth-state";
 
 export default function LoginForm() {
@@ -40,7 +40,7 @@ export default function LoginForm() {
       .then(async (user) => {
         if (!active || !user) return;
         const profile = await getUserProfile(user.uid);
-        router.replace(profile?.completedOnboarding ? "/home" : "/welcome");
+        router.replace(isOnboardingComplete(profile) ? "/home" : "/welcome");
       })
       .catch(() => {});
     return () => {
@@ -173,7 +173,7 @@ export default function LoginForm() {
         router.push(next);
         return;
       }
-      if (profile?.completedOnboarding || localComplete) {
+      if (isOnboardingComplete(profile) || localComplete) {
         router.push("/home");
       } else {
         router.push("/welcome");
@@ -208,7 +208,7 @@ export default function LoginForm() {
       setSuccess("Google Login Successful 🤍");
 
       setTimeout(() => {
-        if (profile?.completedOnboarding) {
+        if (isOnboardingComplete(profile)) {
           router.push("/home");
         } else {
           router.push("/welcome");

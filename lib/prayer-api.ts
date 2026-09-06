@@ -55,6 +55,31 @@ export const CALCULATION_METHODS: Record<number, string> = {
   15: "Diyanet (Turkey)",
 };
 
+// Pick a sensible default calculation method for the user's region so the
+// prayer times shown are accurate for their country without any manual setup.
+export function defaultPrayerMethod(): number {
+  if (typeof window === "undefined" || typeof Intl === "undefined") return 1;
+  let tz = "";
+  try {
+    tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  } catch {
+    return 1;
+  }
+  if (/Asia\/Karachi|Asia\/Calcutta|Asia\/Kolkata|Asia\/Dhaka|Asia\/Colombo|Asia\/Kathmandu/.test(tz))
+    return 1;
+  if (/America\//.test(tz)) return 2;
+  if (/Asia\/Riyadh|Asia\/Jeddah|Asia\/Makkah|Asia\/Baghdad|Asia\/Bahrain|Asia\/Muscat|Asia\/Aden/.test(tz))
+    return 4;
+  if (/Asia\/Tehran/.test(tz)) return 7;
+  if (/Asia\/Kuwait/.test(tz)) return 9;
+  if (/Asia\/Qatar|Asia\/Doha/.test(tz)) return 10;
+  if (/Asia\/Singapore|Asia\/Kuala_Lumpur/.test(tz)) return 11;
+  if (/Europe\/Paris|Europe\/London/.test(tz)) return 12;
+  if (/Europe\/Istanbul/.test(tz)) return 15;
+  if (/Africa\/Cairo|^Africa/.test(tz)) return 5;
+  return 1;
+}
+
 const PRAYER_CACHE_KEY = "islaam-prayer-cache";
 
 function readCachedPrayerDay(latitude: number, longitude: number, method: number) {
@@ -116,7 +141,9 @@ export function getTimeZoneOffset(timezone?: string): number {
       .formatToParts(new Date())
       .find((p) => p.type === "timeZoneName")?.value;
     if (!parts) return 0;
-    const match = parts.match(/^GMT([+-])(\d{2}):?(\d{2})?$/);
+    // Android Chrome returns compact offsets like "GMT+5" or "GMT+5:30"
+    // (single-digit hour), so allow 1-2 hour digits with optional minutes.
+    const match = parts.match(/^GMT([+-])(\d{1,2}):?(\d{1,2})?$/);
     if (!match) return 0;
     const sign = match[1] === "-" ? -1 : 1;
     const h = parseInt(match[2], 10);
@@ -174,25 +201,7 @@ export async function getPrayerTimings(params: {
       }
     );
 
-    const data = res.data.data;
-    const day = {
-      timings: data.timings,
-      date: data.date.readable,
-      weekday: data.date.hijri.weekday.en,
-      hijri: {
-        date: data.date.hijri.date,
-        weekday: data.date.hijri.weekday.en,
-        month: data.date.hijri.month.en,
-        year: data.date.hijri.year,
-      },
-      meta: {
-        latitude,
-        longitude,
-        timezone: data.meta.timezone,
-        method: data.meta.method,
-        location: data.meta.location,
-      },
-    };
+    const day = toPrayerDay(res.data.data, latitude, longitude);
     cachePrayerDay(day, method);
     return day;
   } catch (error) {
@@ -200,6 +209,76 @@ export async function getPrayerTimings(params: {
     if (cached) return cached;
     throw error;
   }
+}
+
+export interface CityTimingsParams {
+  city: string;
+  country?: string;
+  state?: string;
+  method?: number;
+}
+
+export async function getPrayerTimingsByCity(
+  params: CityTimingsParams
+): Promise<PrayerDay> {
+  const { city, country, state, method = 1 } = params;
+  const today = new Date();
+  const dateStr = `${String(today.getDate()).padStart(2, "0")}-${String(
+    today.getMonth() + 1
+  ).padStart(2, "0")}-${today.getFullYear()}`;
+
+  const res = await axios.get(
+    `https://api.aladhan.com/v1/timingsByCity/${dateStr}`,
+    {
+      params: { city, country, state, method },
+    }
+  );
+
+  const raw = res.data.data;
+  const lat = Number(raw.meta?.latitude) || 0;
+  const lng = Number(raw.meta?.longitude) || 0;
+  return toPrayerDay(raw, lat, lng);
+}
+
+interface RawAladhan {
+  timings: PrayerTimings;
+  date?: {
+    readable?: string;
+    hijri?: { date: string; weekday: { en: string }; month: { en: string }; year: string };
+  };
+  meta?: {
+    timezone?: string;
+    method?: { name: string };
+    latitude?: number;
+    longitude?: number;
+    location?: PrayerDay["meta"]["location"];
+  };
+}
+
+function toPrayerDay(raw: RawAladhan, latitude: number, longitude: number): PrayerDay {
+  return {
+    timings: raw.timings,
+    date: raw.date?.readable || "",
+    weekday: raw.date?.hijri?.weekday?.en || "",
+    hijri: {
+      date: raw.date?.hijri?.date || "",
+      weekday: raw.date?.hijri?.weekday?.en || "",
+      month: raw.date?.hijri?.month?.en || "",
+      year: raw.date?.hijri?.year || "",
+    },
+    meta: {
+      latitude,
+      longitude,
+      timezone: raw.meta?.timezone || "",
+      method: raw.meta?.method || { name: "" },
+      location: raw.meta?.location || {
+        city: "",
+        country: "",
+        latitude,
+        longitude,
+      },
+    },
+  };
 }
 
 export async function getPrayerCalendar(params: {

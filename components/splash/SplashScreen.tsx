@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Aurora from "./Aurora";
 import Stars from "./Stars";
 import { waitForAuthUser } from "@/lib/auth-state";
-import { getUserProfile } from "@/lib/firestore";
+import { getUserProfile, isOnboardingComplete } from "@/lib/firestore";
 
 export default function SplashScreen() {
   const router = useRouter();
@@ -61,8 +61,8 @@ export default function SplashScreen() {
             return false;
           }
         })();
-        const complete = profile?.completedOnboarding || localComplete;
-        const path = complete ? "/community" : "/welcome";
+        const complete = (profile ? isOnboardingComplete(profile) : false) || localComplete;
+        const path = complete ? "/home" : "/welcome";
         timers.push(setTimeout(() => go(path), 1400));
       })
       .catch(() => {

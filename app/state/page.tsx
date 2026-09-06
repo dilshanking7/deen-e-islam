@@ -65,16 +65,17 @@ export default function StatePage() {
     try {
       const user = auth.currentUser;
       if (user) {
-        await updateUserProfile(user.uid, { state });
+        try {
+          await updateUserProfile(user.uid, { state });
+        } catch (saveErr) {
+          console.error("State save skipped (continuing):", saveErr);
+        }
       }
       localStorage.setItem("state", state);
       router.push("/city");
-    } catch (error) {
-      console.log(error);
-      alert("Unable to save state.");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (

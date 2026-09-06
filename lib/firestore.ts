@@ -55,7 +55,27 @@ export async function updateUserProfile(
   uid: string,
   data: Partial<UserProfile>
 ) {
-  await updateDoc(doc(db, "users", uid), data);
+  // setDoc with merge creates the document if it does not exist yet and
+  // updates only the given fields otherwise. This keeps onboarding saves
+  // (language/country/state/city/pincode) from failing with
+  // "No document to update" when a profile was never created on the backend.
+  await setDoc(doc(db, "users", uid), data, { merge: true });
+}
+
+export function isOnboardingComplete(profile?: UserProfile | null): boolean {
+  if (!profile) return false;
+  return (
+    profile.completedOnboarding === true ||
+    (!!profile.language && !!profile.country && !!profile.city)
+  );
+}
+
+export async function completeOnboarding(uid: string) {
+  await setDoc(
+    doc(db, "users", uid),
+    { completedOnboarding: true },
+    { merge: true }
+  );
 }
 
 export async function findUserByUsername(username: string) {

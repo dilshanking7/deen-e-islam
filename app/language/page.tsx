@@ -1,7 +1,7 @@
 "use client";
 
 import { auth } from "@/lib/firebase";
-import { getUserProfile, updateUserProfile } from "@/lib/firestore";
+import { getUserProfile, updateUserProfile, isOnboardingComplete } from "@/lib/firestore";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -23,11 +23,19 @@ export default function LanguagePage() {
         setIsOnboarding(true);
         return;
       }
+      let localComplete = false;
+      try {
+        localComplete = localStorage.getItem("islaam-onboarding-complete") === "1";
+      } catch {}
+      if (localComplete) {
+        setIsOnboarding(false);
+        return;
+      }
       try {
         const profile = await getUserProfile(user.uid);
-        setIsOnboarding(!profile?.completedOnboarding);
+        setIsOnboarding(!isOnboardingComplete(profile));
       } catch {
-        setIsOnboarding(true);
+        setIsOnboarding(false);
       }
     }
     checkUser();

@@ -10,9 +10,11 @@ import {
   ADHAN_URL,
   FAJR_ADHAN_URL,
   CALCULATION_METHODS,
+  defaultPrayerMethod,
   formatPrayerTime,
   prayerTimeInLocal,
   getPrayerTimings,
+  getPrayerTimingsByCity,
   type PrayerDay,
   type PrayerTimings,
 } from "@/lib/prayer-api";
@@ -46,8 +48,9 @@ export default function PrayerPage() {
   const [error, setError] = useState("");
   const [method, setMethod] = useState<number>(() => {
     if (typeof window === "undefined") return 1;
-    const saved = Number(localStorage.getItem("prayer-method") || "1");
-    return saved >= 1 ? saved : 1;
+    const saved = Number(localStorage.getItem("prayer-method") || "");
+    if (Number.isFinite(saved) && saved >= 1) return saved;
+    return defaultPrayerMethod();
   });
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(() => {
     if (typeof window === "undefined") return null;
@@ -102,7 +105,7 @@ export default function PrayerPage() {
         setLocationName(geo.label || savedArea || "Your location");
         setError("");
       } else {
-        setError("Location mil nahi payi. Saved city times dikha rahe hain.");
+        await fetchByCity(method);
       }
     } finally {
       setLoading(false);
@@ -142,12 +145,13 @@ export default function PrayerPage() {
     async (lat: number, lng: number, m: number) => {
       setLoading(true);
       setError("");
+      const fallbackArea = getSavedArea();
       try {
         const day = await getPrayerTimings({ latitude: lat, longitude: lng, method: m });
         setData(day);
         if (!locationName) {
           const place = await getPlaceName(lat, lng);
-          setLocationName(place?.label || savedArea || "Your location");
+          setLocationName(place?.label || fallbackArea || "Your location");
         }
       } catch {
         setError("Prayer times nahi mil paye. Internet check karein ya dobara try karein.");
@@ -155,7 +159,39 @@ export default function PrayerPage() {
         setLoading(false);
       }
     },
-    [locationName, savedArea]
+    [locationName]
+  );
+
+  // Jab GPS/IP dono nahi milein, toh onboarding me save ki gayi city ke hisaab
+  // se real prayer times API se laayein (User -> GPS/City -> API -> Prayers).
+  const fetchByCity = useCallback(
+    async (m: number) => {
+      setLoading(true);
+      setError("");
+      const city = localStorage.getItem("city");
+      const country = localStorage.getItem("country") || undefined;
+      const fallbackArea = getSavedArea();
+      if (!city) {
+        if (!coords) {
+          setError("Location available nahi hai. GPS ya IP location on karein.");
+        }
+        setLoading(false);
+        return;
+      }
+      try {
+        const day = await getPrayerTimingsByCity({ city, country, method: m });
+        setData(day);
+        if (day.meta.latitude && day.meta.longitude) {
+          setCoords({ lat: day.meta.latitude, lng: day.meta.longitude });
+        }
+        setLocationName(fallbackArea || [city, country].filter(Boolean).join(", ") || "Your location");
+      } catch {
+        setError("City ke hisaab se prayer times nahi mil paye. Internet check karein.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [coords]
   );
 
   useEffect(() => {
@@ -163,6 +199,18 @@ export default function PrayerPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTimings(coords.lat, coords.lng, method);
   }, [coords, method, fetchTimings]);
+
+  const methodChangedRef = useRef(false);
+  useEffect(() => {
+    if (coords) return;
+    if (!methodChangedRef.current) {
+      methodChangedRef.current = true;
+      return;
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchByCity(method);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [method]);
 
   // Auto-detect location on mount + LIVE tracking (watchPosition)
   useEffect(() => {
@@ -299,7 +347,7 @@ export default function PrayerPage() {
   const nextPrayer = useMemo(() => {
     if (!timings) return null;
     const nowMs = now.getTime();
-    const upcoming = timings.find((t) => t.date.getTime() > nowMs);
+    const upcoming = timings.find((t) => t.key !== "Sunrise" && t.date.getTime() > nowMs);
     if (upcoming) return upcoming;
     const first = timings.find((t) => t.key !== "Sunrise");
     if (first) {

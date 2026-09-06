@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { auth } from "@/lib/firebase";
-import { updateUserProfile } from "@/lib/firestore";
+import { updateUserProfile, completeOnboarding } from "@/lib/firestore";
 
 export default function PincodePage() {
   const router = useRouter();
@@ -28,11 +28,16 @@ export default function PincodePage() {
       await updateUserProfile(user.uid, {
         pincode,
       });
+      await completeOnboarding(user.uid);
     } catch (saveErr) {
       console.error("Firestore pincode save skipped:", saveErr);
     }
 
-    router.push("/profile");
+    try {
+      localStorage.setItem("islaam-onboarding-complete", "1");
+    } catch {}
+
+    router.push("/home");
   }
 
   return (

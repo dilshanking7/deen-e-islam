@@ -47,12 +47,13 @@ export default function CountryPage() {
 
     try {
       setLoading(true);
-      await updateUserProfile(user.uid, { country });
+      try {
+        await updateUserProfile(user.uid, { country });
+      } catch (saveErr) {
+        console.error("Country save skipped (continuing):", saveErr);
+      }
       localStorage.setItem("country", country);
       router.push("/state");
-    } catch (error) {
-      console.error(error);
-      alert("Failed to save country.");
     } finally {
       setLoading(false);
     }

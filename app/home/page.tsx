@@ -11,10 +11,13 @@ import { getMushafProgress } from "@/lib/mushaf-progress";
 import { getSurahByPage } from "@/lib/surah-page-map";
 import {
   getPrayerTimings,
+  getPrayerTimingsByCity,
+  defaultPrayerMethod,
   PRAYER_ORDER,
   formatPrayerTime,
   prayerTimeInLocal,
   type PrayerTimings,
+  type PrayerDay,
 } from "@/lib/prayer-api";
 import { getVerseAt, getRandomVerseIndex, getRandomVerse, type DailyVerse } from "@/lib/daily-verse";
 import { getLocationByIP, getPlaceName } from "@/lib/geo";
@@ -105,15 +108,28 @@ export default function HomePage() {
   const loadPrayerTimings = useCallback(async () => {
     const savedLat = Number(localStorage.getItem("lat"));
     const savedLng = Number(localStorage.getItem("lng"));
-    if (!savedLat || !savedLng) return;
+    let savedMethod = Number(localStorage.getItem("prayer-method") || "");
+    if (!Number.isFinite(savedMethod) || savedMethod < 1) {
+      savedMethod = defaultPrayerMethod();
+    }
 
     try {
-      const savedMethod = Number(localStorage.getItem("prayer-method") || "1");
-      const day = await getPrayerTimings({
-        latitude: savedLat,
-        longitude: savedLng,
-        method: savedMethod >= 1 ? savedMethod : 1,
-      });
+      let day: PrayerDay;
+      if (savedLat && savedLng) {
+        day = await getPrayerTimings({
+          latitude: savedLat,
+          longitude: savedLng,
+          method: savedMethod >= 1 ? savedMethod : 1,
+        });
+      } else {
+        const city = localStorage.getItem("city");
+        if (!city) return;
+        day = await getPrayerTimingsByCity({
+          city,
+          country: localStorage.getItem("country") || undefined,
+          method: savedMethod >= 1 ? savedMethod : 1,
+        });
+      }
       const now = new Date();
       const timings = PRAYER_ORDER.filter((p) => p.key !== "Sunrise").map((p) => ({
         ...p,
